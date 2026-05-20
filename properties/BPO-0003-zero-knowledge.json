@@ -1,0 +1,89 @@
+{
+  "id": "BPO:0003",
+  "slug": "zero-knowledge-witness-privacy",
+  "title": "Zero-Knowledge (Simulator-Based Witness Privacy)",
+  "version": "0.2.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["ZK property", "witness hiding (related)", "proof reveals nothing beyond validity"],
+    "academic_terms": ["computational zero-knowledge (CZK)", "honest-verifier ZK (HVZK)", "simulation paradigm", "indistinguishability of real and ideal views"],
+    "industry_terms": ["privacy of the prover's secret inputs", "the proof leaks no witness"],
+    "external_refs": {
+      "other": ["Goldwasser-Micali-Rackoff (1985) interactive proofs", "Fiat-Shamir heuristic (NIZK)"]
+    }
+  },
+  "classification": {
+    "modal_class": ["hypersafety", "non-interference", "observational-determinism"],
+    "deontic_role": ["guarantee", "cryptographic-assumption"],
+    "domains": ["zk", "zk-circuit", "crypto-protocol", "zkvm"],
+    "abstraction_levels": ["cryptographic", "protocol"],
+    "verification_modalities": ["cryptographic-proof", "interactive-theorem-proving"],
+    "decidability": "computationally-conditional"
+  },
+  "descriptions": {
+    "semantic": "An interaction or proof string for a true statement reveals nothing about the prover's secret witness beyond the statement's truth. Formally there exists an efficient simulator that, given only the public statement (no witness), produces a transcript computationally indistinguishable from a real prover-verifier interaction. Anything an adversarial verifier could learn from the real proof, it could have computed itself from the statement alone.",
+    "system_theoretic": "A relation between TWO systems — the real prover-verifier composition and an ideal simulator composition — required to be observationally indistinguishable to any efficient distinguisher. It is therefore a property of the *pair* of behaviour distributions, not of any single execution: a hyperproperty (non-interference between the secret-witness input channel and the verifier-observable output channel).",
+    "security": "Confidentiality of the secret inputs. Its violation is a witness-leakage / information-flow breach: a verifier (or chain observer) extracts secret data — keys, balances, identities, preimages — from proofs that were supposed to hide them. Distinct from soundness violations, which are integrity breaches (false statements accepted).",
+    "execution_semantics": "At the system level it manifests as: chosen public inputs/outputs, Fiat-Shamir transcript construction, randomness (blinding) usage, and which signals of a circuit are exposed. Leakage occurs when randomness is reused or insufficient, when public outputs are a non-trivial function of the witness, when the simulator's required trapdoor/CRS assumptions fail, or when side channels (timing, proof size variation) correlate with the witness.",
+    "formal_verification": "NOT a trace property; single-trace symbolic execution and fuzzing are categorically inapplicable to the privacy claim. Establishing ZK is a cryptographic reduction: exhibit a PPT simulator and prove indistinguishability under stated hardness assumptions — pen-and-paper or mechanized in a relational/probabilistic proof assistant (EasyCrypt). Circuit tools instead target the SEPARABLE, single-system sub-properties (soundness via under-constraint detection), which is where real-world bugs cluster."
+  },
+  "formalization": {
+    "signature": "Relation R subset Statements x Witnesses. Interactive system (P,V) for language L_R = { x : exists w . (x,w) in R }. View_{V*}<P(w),V*>(x) = the random variable of V*'s entire view (its coins + received messages). ~_c denotes computational indistinguishability of distribution ensembles.",
+    "first_order_logic": "Completeness:  forall (x,w) in R . Pr[ <P(w),V>(x) = accept ] >= 1 - negl(|x|).\nKnowledge soundness (the INTEGRITY dual, see relationships):  exists PPT extractor E . forall P* . Pr[<P*,V>(x)=accept] = eps  =>  Pr[ (x, E^{P*}(x)) in R ] >= poly-related-to(eps) - negl.",
+    "temporal_logic": {
+      "ltl": "n/a — ZK is not a temporal trace property; do not encode it in LTL/CTL. Attempting to is the category error this record exists to flag.",
+      "fairness": "n/a"
+    },
+    "hoare": [],
+    "state_machine": "Two LTS instances are compared: M_real (P with secret w composed with V*) and M_ideal (Sim with only x). The 2-safety / observational requirement: for the witness-input low-equivalence relation, the verifier-observable outputs are indistinguishable. Self-composition reduces the hyperproperty to a safety property on the product machine M_real x M_ideal — the standard route to mechanizing k-safety.",
+    "type_theoretic": "Non-interference in an information-flow type system: label the witness High and the public statement/transcript Low; ZK is the typing judgment that no High input flows to a Low-observable output beyond the declassification permitted by membership in L_R. The declassification policy is exactly 'x in L_R'.",
+    "hyperproperty": "ZK is a 2-execution property (compare real vs. ideal) and is verified either by (a) cryptographic reduction with an explicit simulator, or (b) for the information-flow fragment, by self-composition + a safety checker on the product system. It lives in the hypersafety class of the Clarkson-Schneider lattice; the *privacy* part is not expressible as a set of admissible single traces."
+  },
+  "relationships": [
+    { "type": "conflictsWith", "target": "BPO:0072", "note": "Tension with public-auditability/transparency requirements; resolved by selective disclosure, not by weakening ZK." },
+    { "type": "composesWith", "target": "BPO:0070", "note": "Composes with Knowledge-Soundness (the integrity dual): a proof system needs BOTH; they are independent and a system can have one without the other." },
+    { "type": "refinedBy", "target": "BPO:0073", "note": "Refined at the circuit level into per-circuit non-leakage of exposed signals." },
+    { "type": "dependsOn", "target": "BPO:0074", "note": "Relies on hardness assumptions (DLOG/DDH/knowledge-of-exponent/AGM, or hash-as-RO for Fiat-Shamir) and, for NIZK, a correctly-generated CRS / no toxic-waste leak." },
+    { "type": "mitigates", "target": "ATK:witness-leakage" },
+    { "type": "mitigates", "target": "ATK:deanonymization-via-proof" }
+  ],
+  "attack_surface": [
+    { "class": "insufficient-blinding", "pattern": "reused or low-entropy prover randomness lets the verifier solve for the witness across proofs", "incident_refs": ["nonce-reuse class (analogous to ECDSA k-reuse)"], "notes": "Distinct mechanism, same flavour: randomness reuse collapses the simulator's hiding." },
+    { "class": "public-output-leakage", "pattern": "a public signal is a non-trivial / invertible function of the secret witness", "incident_refs": [], "notes": "Circuit-level: audit the map from witness to public inputs for injectivity/leakage." },
+    { "class": "fiat-shamir-misbinding", "pattern": "transcript hashing omits a value, enabling grinding or revealing structure (weak Fiat-Shamir)", "incident_refs": ["'Frozen Heart' weak-Fiat-Shamir vulnerability class — VERIFY scope before citing"], "notes": "Primarily a SOUNDNESS issue but can interact with the privacy argument's RO assumption." },
+    { "class": "toxic-waste-leak", "pattern": "trusted-setup CRS secret retained, breaking the simulation/extraction assumptions", "incident_refs": [], "notes": "Discharged by ceremony assumptions (BPO:0074)." },
+    { "class": "side-channel-correlation", "pattern": "proof generation timing/size correlates with witness", "incident_refs": [], "notes": "Outside the idealized model; requires constant-time prover." }
+  ],
+  "observability": {
+    "events": [],
+    "metrics": ["entropy of prover randomness", "mutual information between public signals and witness (audit-time, on synthetic witnesses)", "constant-timeness of prover"],
+    "invariant_checkpoints": ["every exposed public signal is provably independent of the secret part of the witness (declassification-policy check)"],
+    "runtime_assertions": ["n/a on-chain: ZK is not observable from a single transcript; it is a property of the SYSTEM, not of any one proof"],
+    "telemetry": ["randomness-source health monitoring on the proving infrastructure"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Simulator construction + reduction (the canonical proof)", "tools": ["EasyCrypt", "SSProve / Coq", "CryptoVerif"], "strength": "proof", "notes": "Mechanize the game-hopping indistinguishability proof under explicit assumptions. This is the only thing that actually establishes the privacy claim." },
+      { "approach": "Information-flow / self-composition checking", "tools": ["relational verifiers", "self-composition + Halmos/SMT on the witness->public-signal map"], "strength": "bounded-proof", "notes": "Targets the non-leakage fragment, not the full cryptographic claim." },
+      { "approach": "Circuit SOUNDNESS analysis (the dual, BPO:0070 — included because it is what tooling actually does)", "tools": ["Picus (under-constraint detection, circom)", "Ecne (signal-constraint analysis)", "Veridise circuit analyzers", "Coda (Coq-based circuit verification)"], "strength": "bounded-proof", "notes": "CRITICAL CLARIFICATION: these tools find UNDER-CONSTRAINT (soundness/integrity) bugs — the dominant real-world circuit failure — they do NOT verify the ZK/privacy property. Conflating the two is a common and dangerous mistake." }
+    ],
+    "testability": ["privacy is not unit-testable; test the separable invariants: public-signal independence on randomized witnesses, prover randomness entropy, constant-time proving"]
+  },
+  "enforcement": {
+    "runtime": ["high-entropy fresh blinding per proof", "constant-time prover implementation"],
+    "static": ["information-flow typing of circuit signals (High witness vs Low public)", "audit map witness -> public inputs for leakage"],
+    "design_patterns": ["minimize exposed public signals", "audited/MPC trusted-setup ceremony or transparent setup (STARK/FRI) to remove toxic-waste", "strong Fiat-Shamir: hash the full transcript including all public data"]
+  },
+  "assumptions": [
+    { "kind": "cryptographic", "statement": "Underlying hardness assumption holds (e.g. DLOG/DDH/knowledge-of-exponent in AGM, or random-oracle for the hash in Fiat-Shamir).", "discharged_by": "BPO:0074" },
+    { "kind": "trust", "statement": "For NIZK with trusted setup, the CRS secret ('toxic waste') was destroyed; at least one ceremony participant was honest.", "discharged_by": "BPO:0074" },
+    { "kind": "tooling", "statement": "Prover implementation matches the proven abstract protocol (no implementation-level side channel or randomness defect).", "discharged_by": null }
+  ],
+  "provenance": {
+    "authors": ["BPO seed"],
+    "created": "2026-05-20",
+    "confidence": "draft",
+    "sources": ["Goldwasser, Micali, Rackoff (1985)", "Clarkson & Schneider, Hyperproperties (2010)", "Sabelfeld & Myers, information-flow security (survey)"],
+    "notes": "This record's primary pedagogical role in BPO is to make the trace-property / hyperproperty boundary concrete and to separate the privacy claim (ZK, needs reduction) from the integrity claim (soundness/under-constraint, where automated tooling lives)."
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "$id": "https://bpo.spec/schema/relationship.vocab.json",
+  "title": "BPO Relationship Vocabulary",
+  "description": "Formal semantics for the typed edges of the property DAG. Each edge type has a precise reading so automated reasoners (and humans) compose properties soundly. Semantics are given over trace-property denotations: a property P denotes a set of admissible behaviours [[P]] (for hyperproperties, a set of sets of behaviours).",
+  "edges": {
+    "refines": {
+      "reading": "P refines Q  ==  [[P]] subseteq [[Q]] under a refinement mapping. P is the more concrete/stronger spec; any implementation of P satisfies Q. Vertical (abstraction-level) edge.",
+      "transitive": true, "antisymmetric": true,
+      "soundness_note": "Refinement must preserve the relevant fragment (safety refinement vs full refinement). Stuttering refinement (a la TLA+) is the default for transition systems."
+    },
+    "refinedBy": { "reading": "inverse of refines", "transitive": true },
+    "implies": {
+      "reading": "P implies Q  ==  every behaviour satisfying P satisfies Q, i.e. [[P]] subseteq [[Q]] WITHOUT change of state vocabulary. Horizontal logical entailment.",
+      "transitive": true,
+      "soundness_note": "If P implies Q then verifying P discharges Q; conversely violating Q falsifies P. Drives proof reuse and de-duplication."
+    },
+    "impliedBy": { "reading": "inverse of implies", "transitive": true },
+    "composesWith": {
+      "reading": "P composesWith Q  ==  the conjunction is consistent AND the rely-guarantee contracts are mutually dischargeable: P's guarantees cover Q's relies on shared state and vice versa. Parallel composition.",
+      "symmetric": true,
+      "soundness_note": "Non-trivial: two individually-sound properties can be jointly unsatisfiable, or one can invalidate the other's assumptions. composesWith asserts the discharge has been checked."
+    },
+    "conflictsWith": {
+      "reading": "[[P]] intersect [[Q]] = emptyset given the shared environment: cannot both hold. Surfaces genuine design tensions (e.g. unconditional liveness vs. emergency-pause safety).",
+      "symmetric": true
+    },
+    "dependsOn": {
+      "reading": "P dependsOn A  ==  A appears as an (assumption) premise of P's guarantee. Discharge ledger edge. Targets are typically assumption-role properties.",
+      "transitive": true
+    },
+    "specializes": { "reading": "taxonomic subsumption: P is-a Q in the domain poly-hierarchy (SKOS narrower).", "transitive": true },
+    "generalizes": { "reading": "inverse of specializes (SKOS broader).", "transitive": true },
+    "equivalentTo": { "reading": "[[P]] = [[Q]] (mutual implication / mutual refinement).", "symmetric": true, "transitive": true },
+    "strengthens": { "reading": "P strengthens Q == P implies Q and P != Q (strict).", "transitive": true },
+    "weakens": { "reading": "inverse of strengthens.", "transitive": true },
+    "mitigates": { "reading": "Holding P reduces or eliminates feasibility of attack-class A. Bridges the property layer to the threat layer (the 'CWE/CVE side').", "transitive": false }
+  },
+  "reasoning_profile": {
+    "note": "implies/refines/specializes/dependsOn/strengthens form transitive closures usable for query expansion and proof-obligation propagation. conflictsWith + composesWith drive consistency checking. A property whose dependsOn-closure contains an undischarged assumption is flagged 'conditionally-assured'."
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "id": "BPO:0001",
+  "slug": "no-unauthorized-mint",
+  "title": "No Unauthorized Mint (Supply Monotonicity Under Authority)",
+  "version": "0.2.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["mint authority integrity", "supply-increase guard", "inflation safety"],
+    "academic_terms": ["resource conservation invariant", "guarded transition monotonicity"],
+    "industry_terms": ["only-minter-can-mint", "no infinite mint"],
+    "external_refs": {
+      "swc": ["SWC-105 (unprotected functions, related)", "SWC-115 (tx.origin auth, related)"],
+      "cwe": ["CWE-284 Improper Access Control", "CWE-682 Incorrect Calculation"],
+      "dasp": ["DASP-2 Access Control", "DASP-3 Arithmetic"],
+      "eip": ["ERC-20", "ERC-1155"]
+    }
+  },
+  "classification": {
+    "modal_class": ["safety"],
+    "deontic_role": ["invariant", "guarantee"],
+    "domains": ["token", "access-control", "evm"],
+    "abstraction_levels": ["contract", "economic"],
+    "verification_modalities": ["smt", "symbolic-execution", "bounded-model-checking", "runtime-verification", "static-dataflow"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "Across every reachable state transition, any positive change to a token's total supply (or to the sum of holder balances) occurs only via an operation explicitly designated as a mint, executed by a principal currently holding the mint capability, with the supply increase exactly equal to the authorized minted amount. No execution path — direct call, fallback, delegatecall, callback, or upgrade — may increase accounted value without a corresponding authorized, guarded mint event.",
+    "system_theoretic": "A guarded-monotonicity constraint on the labelled transition system of the contract: the supply observable is a non-decreasing-only-under-guard function of the transition label and the authority configuration. It is a control-invariant: the set of transitions that can move the supply observable upward is exactly the controllable input set gated by the authority guard.",
+    "security": "Defends the asset-issuance trust boundary. Its violation is an unbounded counterfeiting / dilution capability: an adversary fabricates value, breaking conservation, collateralization, and ultimately solvency of every downstream protocol that prices or collateralizes the token.",
+    "execution_semantics": "Concretely: after any external transaction, totalSupply() and the storage slots backing balances must satisfy the conservation relation and the supply must not have risen unless the dispatched selector was a mint selector AND the caller passed the role guard. Violations live in (a) missing/incorrect guards on mint paths, (b) arithmetic that creates balance without crediting supply or vice versa, (c) reachable alternate write paths (delegatecall, reinitializable initializer, storage-collision via proxy) that mutate balance/supply storage directly.",
+    "formal_verification": "A 1-safety property: it asserts a bad thing (an unguarded supply increase) never happens, so it is provable by establishing a state invariant plus a per-transition transition-invariant. Tractable for SMT/parametric rule checking because it is expressible as a relation between pre- and post-state of a single transition over a finite method set."
+  },
+  "formalization": {
+    "signature": "Sorts: Addr, Val=Nat. State s. Functions: totalSupply: State -> Val ; bal: State x Addr -> Val. Predicate: hasRole_MINTER: State x Addr -> Bool. Transitions s --[tx]--> s' with tx = (sender, selector, args).",
+    "first_order_logic": "Conservation (state invariant):  forall s reachable .  totalSupply(s) = SUM_{a:Addr} bal(s,a).\nGuarded monotonicity (transition invariant):  forall s,s',tx . ( s --[tx]--> s'  /\\  totalSupply(s') > totalSupply(s) )  ->  ( isMint(tx.selector)  /\\  hasRole_MINTER(s, tx.sender)  /\\  totalSupply(s') - totalSupply(s) = mintedAmount(tx) ).\nNo-side-mint:  forall s,s',tx . ( s --[tx]--> s' /\\ ~isMint(tx.selector) ) -> totalSupply(s') <= totalSupply(s).",
+    "temporal_logic": {
+      "ltl": "G( (totalSupply increases between consecutive states) -> (last action was an authorized mint) )  -- expressed with action propositions a_mint, a_authz: G( supplyUp -> (a_mint /\\ a_authz) )",
+      "tla": "SupplyInv == totalSupply = SetSum(balances)\nGuarded == [][ (totalSupply' > totalSupply) => (action = \"Mint\" /\\ sender \\in Minters /\\ totalSupply' = totalSupply + amount) ]_vars\nSpec => []SupplyInv /\\ Guarded",
+      "fairness": "None required: pure safety, holds in all (even unfair) behaviours."
+    },
+    "hoare": [
+      { "pre": "hasRole_MINTER(sender) /\\ totalSupply = T /\\ to != 0 /\\ T + v does not overflow", "command": "mint(to, v)", "post": "totalSupply = T + v /\\ bal(to) = old(bal(to)) + v" },
+      { "pre": "totalSupply = T", "command": "f(...)  for any selector f with ~isMint(f)", "post": "totalSupply <= T" }
+    ],
+    "state_machine": "Two-color transition partition: GREEN transitions (mint under guard) may raise the supply observable; all other (BLACK) transitions must preserve or lower it. The property is the assertion that the LTS contains no BLACK edge that raises supply and no GREEN edge that fires without the guard predicate.",
+    "type_theoretic": "Model the mint capability as a linear/affine resource (a non-duplicable token of authority): mint : MinterCap -o (Addr -> Val -> Unit), where MinterCap cannot be forged or duplicated. Supply increase is then typed as consuming an authorization witness, making 'mint without capability' ill-typed. Realizable via capability-based access control or session types over roles.",
+    "algebraic": "(Val, +, 0) commutative monoid; balances form a finitely-supported map Addr ->_fin Val; totalSupply is the monoid homomorphism (fold +). Conservation states totalSupply = the fold; mint is the unique generator permitted to act non-homomorphically on the fold under guard."
+  },
+  "relationships": [
+    { "type": "refines", "target": "BPO:0101", "note": "no-unauthorized-mint is one refinement leg of economic Conservation-of-Value (BPO:0101, economic level)." },
+    { "type": "dependsOn", "target": "BPO:0040", "note": "relies on Access-Control-Correctness: the role guard must itself be sound (no role-grant escalation, no uninitialized-admin)." },
+    { "type": "composesWith", "target": "BPO:0020", "note": "composes with Reentrancy-Safety: a reentrant mint callback must not bypass the guard or double-credit." },
+    { "type": "dependsOn", "target": "BPO:0030", "note": "relies on Storage-Layout-Isolation under upgradeability: proxy storage collision can rewrite supply/balance slots, defeating the guard out-of-band." },
+    { "type": "mitigates", "target": "ATK:counterfeit-issuance", "note": "" },
+    { "type": "mitigates", "target": "ATK:arithmetic-overflow-mint", "note": "" }
+  ],
+  "attack_surface": [
+    { "class": "missing-authorization", "pattern": "mint() lacking onlyRole/onlyOwner modifier, or guarded by tx.origin instead of msg.sender", "incident_refs": ["UNVERIFIED: numerous public 'unprotected mint' findings"], "notes": "Default-deny analysis: enumerate every selector whose dataflow reaches a supply/balance write." },
+    { "class": "arithmetic-overflow-mint", "pattern": "pre-0.8 unchecked addition wraps balance/supply creating phantom value (e.g. batch-transfer overflow class)", "incident_refs": ["CVE-2018-10299 (batchOverflow class) — VERIFY before citing as authoritative"], "notes": "Largely closed by checked arithmetic >=0.8.0 but resurfaces in unchecked{} blocks and assembly." },
+    { "class": "reinitializable-initializer", "pattern": "proxy initializer callable twice resets minter set to attacker", "incident_refs": ["UNVERIFIED"], "notes": "Cross-references BPO:0030 / BPO:0040." },
+    { "class": "delegatecall-storage-write", "pattern": "delegatecall to attacker-controlled implementation writes supply/balance slots directly, bypassing mint selector entirely", "incident_refs": ["UNVERIFIED"], "notes": "Defeats selector-level reasoning; requires storage-slot-level invariant + library-call control." },
+    { "class": "rebasing-rounding-mint", "pattern": "rebase / share-accounting rounding silently inflates effective supply", "incident_refs": [], "notes": "Conservation must be stated over the canonical accounting unit, not display balances." }
+  ],
+  "observability": {
+    "events": ["Transfer(0x0 -> to) per ERC-20 mint convention", "RoleGranted(MINTER_ROLE, ...)"],
+    "metrics": ["d(totalSupply)/d(block)", "count(mint selector invocations) vs count(supply increases)"],
+    "invariant_checkpoints": ["post-transaction: totalSupply == sum(balances)", "supply non-decrease attributed to a Transfer-from-zero with authorized sender"],
+    "runtime_assertions": ["assert(totalSupply == _previousSupply + _mintedThisCall)", "assert(_mintedThisCall == 0 || hasRole(MINTER_ROLE, msg.sender))"],
+    "telemetry": ["alert on supply increase without matching mint event in the same tx"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Parametric invariant + per-method rule", "tools": ["Certora Prover", "Halmos"], "strength": "proof", "notes": "Invariant: totalSupply == sum of balances; parametric rule over ALL methods: only the mint method may increase totalSupply, and only when caller hasRole(MINTER_ROLE). Halmos gives a bounded SMT proof over symbolic calldata." },
+      { "approach": "Invariant fuzzing", "tools": ["Echidna", "Foundry invariant tests"], "strength": "high-coverage-evidence", "notes": "echidna_supply_conserved() and a stateful handler that randomizes callers; finds missing guards fast but does not prove absence." },
+      { "approach": "Static dataflow / taint to storage writes", "tools": ["Slither", "Mythril"], "strength": "heuristic-evidence", "notes": "Detect supply/balance writes reachable without an access-control guard on the path." },
+      { "approach": "Semantic model checking over EVM", "tools": ["KEVM / K-framework", "hevm"], "strength": "proof", "notes": "Discharges the storage-slot-level variant (delegatecall, assembly) that selector-level tools miss." }
+    ],
+    "testability": ["unauthorized caller mint reverts", "supply equals sum of balances after randomized op sequences", "mint amount overflow reverts", "double-initialization reverts"]
+  },
+  "enforcement": {
+    "runtime": ["role-gated modifier on every mint path", "checked arithmetic / SafeCast", "post-condition assert on supply delta"],
+    "static": ["compile-time capability typing of mint authority", "linter rule: no balance/supply write outside a guarded mint function"],
+    "design_patterns": ["single canonical _mint internal sink that all paths funnel through", "capability object instead of address-role boolean", "immutable or timelocked minter set"]
+  },
+  "assumptions": [
+    { "kind": "tooling", "statement": "Compiler emits checked arithmetic for the relevant scopes (Solidity >=0.8 or explicit SafeMath).", "discharged_by": "BPO:0060" },
+    { "kind": "trust", "statement": "The set of MINTER_ROLE holders is itself governed correctly (no covert grant).", "discharged_by": "BPO:0040" },
+    { "kind": "environmental", "statement": "Storage layout is not aliased by a proxy/delegatecall path.", "discharged_by": "BPO:0030" }
+  ],
+  "provenance": {
+    "authors": ["BPO seed"],
+    "created": "2026-05-20",
+    "confidence": "draft",
+    "sources": ["Alpern & Schneider, Defining Liveness (1985) — safety classification", "standard ERC-20/1155 mint semantics"],
+    "notes": "Incident_refs marked UNVERIFIED/VERIFY must be confirmed against primary sources before this record advances to status>=reviewed."
+  }
+}

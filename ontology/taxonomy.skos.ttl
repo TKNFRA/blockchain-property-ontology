@@ -1,0 +1,69 @@
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix bpo:  <https://bpo.spec/ontology/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+
+# ---------------------------------------------------------------------------
+# BPO DOMAIN TAXONOMY  (Axis C)
+# A SKOS poly-hierarchy (concepts may have multiple broader concepts -> DAG,
+# not a tree). This is the SUBJECT-MATTER axis only; modal class, deontic
+# role, abstraction level and verification modality are SEPARATE orthogonal
+# axes (see ontology/axes.md) and are NOT encoded here.
+# ---------------------------------------------------------------------------
+
+bpo:Scheme a skos:ConceptScheme ;
+  skos:prefLabel "BPO Blockchain System Domain Taxonomy" .
+
+# --- Top concepts -----------------------------------------------------------
+bpo:execution        a skos:Concept ; skos:prefLabel "Execution layer" ; skos:topConceptOf bpo:Scheme .
+bpo:cryptography     a skos:Concept ; skos:prefLabel "Cryptography" ; skos:topConceptOf bpo:Scheme .
+bpo:consensus        a skos:Concept ; skos:prefLabel "Consensus & ordering" ; skos:topConceptOf bpo:Scheme .
+bpo:application      a skos:Concept ; skos:prefLabel "Application / protocol logic" ; skos:topConceptOf bpo:Scheme .
+bpo:interop          a skos:Concept ; skos:prefLabel "Interoperability" ; skos:topConceptOf bpo:Scheme .
+bpo:toolchain        a skos:Concept ; skos:prefLabel "Toolchain & compilation" ; skos:topConceptOf bpo:Scheme .
+bpo:governance       a skos:Concept ; skos:prefLabel "Governance" ; skos:topConceptOf bpo:Scheme .
+bpo:agentic          a skos:Concept ; skos:prefLabel "Agentic / AI execution" ; skos:topConceptOf bpo:Scheme .
+
+# --- Execution --------------------------------------------------------------
+bpo:evm              a skos:Concept ; skos:prefLabel "EVM semantics" ; skos:broader bpo:execution .
+bpo:storage          a skos:Concept ; skos:prefLabel "Storage & state model" ; skos:broader bpo:execution .
+bpo:state-transition a skos:Concept ; skos:prefLabel "State transition system" ; skos:broader bpo:execution .
+bpo:vm-generic       a skos:Concept ; skos:prefLabel "Virtual machine (generic)" ; skos:broader bpo:execution .
+bpo:zkvm             a skos:Concept ; skos:prefLabel "zkVM" ; skos:broader bpo:execution , bpo:cryptography .
+
+# --- Application ------------------------------------------------------------
+bpo:contract         a skos:Concept ; skos:prefLabel "Smart contract (generic)" ; skos:broader bpo:application .
+bpo:token            a skos:Concept ; skos:prefLabel "Token / asset accounting" ; skos:broader bpo:application .
+bpo:access-control   a skos:Concept ; skos:prefLabel "Access control & authority" ; skos:broader bpo:application .
+bpo:upgradeability   a skos:Concept ; skos:prefLabel "Upgradeability / proxy" ; skos:broader bpo:application .
+bpo:defi             a skos:Concept ; skos:prefLabel "DeFi" ; skos:broader bpo:application .
+bpo:defi-lending     a skos:Concept ; skos:prefLabel "Lending / collateral" ; skos:broader bpo:defi .
+bpo:defi-amm         a skos:Concept ; skos:prefLabel "AMM / DEX" ; skos:broader bpo:defi .
+bpo:wallet           a skos:Concept ; skos:prefLabel "Wallet" ; skos:broader bpo:application .
+bpo:account-abstraction a skos:Concept ; skos:prefLabel "Account abstraction" ; skos:broader bpo:application , bpo:wallet .
+bpo:rwa              a skos:Concept ; skos:prefLabel "Tokenized financial infrastructure" ; skos:broader bpo:application .
+
+# --- Cryptography -----------------------------------------------------------
+bpo:zk               a skos:Concept ; skos:prefLabel "Zero-knowledge proof systems" ; skos:broader bpo:cryptography .
+bpo:zk-circuit       a skos:Concept ; skos:prefLabel "ZK arithmetic circuit" ; skos:broader bpo:zk .
+bpo:signatures       a skos:Concept ; skos:prefLabel "Signatures & PKI" ; skos:broader bpo:cryptography .
+bpo:hash             a skos:Concept ; skos:prefLabel "Hash & commitment" ; skos:broader bpo:cryptography .
+bpo:crypto-protocol  a skos:Concept ; skos:prefLabel "Cryptographic protocol" ; skos:broader bpo:cryptography .
+
+# --- Interop ----------------------------------------------------------------
+bpo:cross-chain      a skos:Concept ; skos:prefLabel "Cross-chain messaging" ; skos:broader bpo:interop .
+bpo:bridge           a skos:Concept ; skos:prefLabel "Bridge" ; skos:broader bpo:interop .
+bpo:rollup           a skos:Concept ; skos:prefLabel "Rollup / L2 settlement" ; skos:broader bpo:interop , bpo:consensus .
+
+# --- Toolchain --------------------------------------------------------------
+bpo:compiler         a skos:Concept ; skos:prefLabel "Compiler" ; skos:broader bpo:toolchain .
+bpo:interpreter      a skos:Concept ; skos:prefLabel "Interpreter" ; skos:broader bpo:toolchain .
+bpo:client           a skos:Concept ; skos:prefLabel "Blockchain client" ; skos:broader bpo:toolchain , bpo:consensus .
+bpo:formal-layer     a skos:Concept ; skos:prefLabel "Formal verification layer" ; skos:broader bpo:toolchain .
+
+# --- Consensus / Governance / Agentic --------------------------------------
+bpo:finality         a skos:Concept ; skos:prefLabel "Finality & fork choice" ; skos:broader bpo:consensus .
+bpo:mempool          a skos:Concept ; skos:prefLabel "Mempool / ordering / MEV" ; skos:broader bpo:consensus .
+bpo:voting           a skos:Concept ; skos:prefLabel "Voting & proposals" ; skos:broader bpo:governance .
+bpo:timelock         a skos:Concept ; skos:prefLabel "Timelock / delayed execution" ; skos:broader bpo:governance .
+bpo:agentic-policy   a skos:Concept ; skos:prefLabel "Agent policy & bounded autonomy" ; skos:broader bpo:agentic .
+bpo:agentic-payment  a skos:Concept ; skos:prefLabel "Agentic payment authority" ; skos:broader bpo:agentic , bpo:wallet .

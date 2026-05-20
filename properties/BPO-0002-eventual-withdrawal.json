@@ -1,0 +1,92 @@
+{
+  "id": "BPO:0002",
+  "slug": "eventual-withdrawal",
+  "title": "Eventual Withdrawal (No Permanent Freeze of User Funds)",
+  "version": "0.2.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["no permanent freeze", "exit liveness", "fund recoverability", "escape hatch guarantee"],
+    "academic_terms": ["conditional liveness under fairness", "progress property"],
+    "industry_terms": ["users can always exit", "no locked funds", "forced inclusion / L2 escape hatch"],
+    "external_refs": {
+      "swc": ["SWC-113 DoS with failed call", "SWC-128 DoS with block gas limit"],
+      "dasp": ["DASP-5 Denial of Service"]
+    }
+  },
+  "classification": {
+    "modal_class": ["liveness", "guarantee-liveness-conditional"],
+    "deontic_role": ["guarantee", "temporal-commitment"],
+    "domains": ["contract", "defi", "rollup", "bridge", "wallet"],
+    "abstraction_levels": ["contract", "protocol", "systemic"],
+    "verification_modalities": ["model-checking", "interactive-theorem-proving"],
+    "decidability": "computationally-conditional"
+  },
+  "descriptions": {
+    "semantic": "Any principal who has deposited recoverable funds and who satisfies the (statically known, finitely achievable) withdrawal precondition will, after submitting a well-formed withdrawal request, eventually receive those funds — under explicitly stated fairness and environmental assumptions. There is no reachable state from which a legitimately-entitled withdrawal is permanently unsatisfiable.",
+    "system_theoretic": "A progress property over the joint user-protocol-environment transition system: from every state in which a withdrawal is enabled, a fair scheduling of system steps reaches a state in which the withdrawal has completed. It is a reachability-under-fairness obligation on a non-terminating reactive system, not a single-transition constraint.",
+    "security": "Protects against value capture by indefinite denial of service: griefing, admin abuse (malicious or buggy pause that cannot be lifted), unbounded loops, dependency on a liveness-failed external actor (sequencer, oracle, relayer), or gas-exhaustion bricking. The failure mode is not theft but irrecoverable lock — economically equivalent to loss.",
+    "execution_semantics": "Manifests across many transactions and many blocks, possibly involving multiple actors. Violations are typically structural: a single point of liveness failure (one sequencer / one admin key / one oracle) with no permissionless fallback; an unbounded iteration whose gas cost grows with adversary-controlled state; a withdrawal path that can be front-run into permanent revert; a pause with no time bound or no forced-exit.",
+    "formal_verification": "A liveness property. It CANNOT be established by reachability/symbolic-execution tools that only search for reachable bad states — those prove safety. It requires (a) fairness assumptions to even be true, and (b) model checking with fairness (LTL/CTL with strong/weak fairness) or interactive proof of a well-founded ranking/variant function that strictly decreases toward completion. Bounded fuzzers cannot witness 'eventually'."
+  },
+  "formalization": {
+    "signature": "Predicates over global state s: requested(u): user u has a pending valid withdrawal; entitled(u): u meets the withdrawal precondition; completed(u): u's funds transferred. Environment actions: chainStep (a block is produced), include(tx) (a submitted tx is sequenced).",
+    "first_order_logic": "Well-foundedness witness:  exists rank: State -> Ordinal . forall s,s',u . ( requested(u) at s /\\ ~completed(u) /\\ s --> s' under a fair step ) -> ( completed(u) at s'  \\/  rank(s') < rank(s) ).  Termination of the descending chain yields completion.",
+    "temporal_logic": {
+      "ltl": "G( (requested(u) /\\ entitled(u)) -> F completed(u) )    -- 'request implies eventual completion'",
+      "ctl": "AG( (requested(u) /\\ entitled(u)) -> AF completed(u) )   -- on ALL fair paths",
+      "fairness": "REQUIRED, and load-bearing:\n  (WF1) Weak fairness on chainStep: blocks are eventually produced (consensus liveness).\n  (WF2) Strong fairness on include(tx): a continuously-resubmitted valid tx with sufficient fee is eventually sequenced (censorship resistance / forced inclusion).\n  (A3) No unbounded adversarial growth of the work needed per withdrawal (bounded gas).\n  Without WF1+WF2 the property is FALSE, not merely unproven."
+    },
+    "hoare": [
+      { "pre": "requested(u) /\\ entitled(u) /\\ rank(s) = k", "command": "any fair system step", "post": "completed(u) \\/ rank(s) < k" }
+    ],
+    "state_machine": "Büchi-style acceptance: the property is the set of infinite runs in which every 'requested & entitled' is eventually followed by 'completed'. The negation (a run with a request never satisfied) must be empty in the product of system x fairness constraints.",
+    "type_theoretic": "Corresponds (Curry–Howard for temporal/linear logic) to a non-terminating process that is guaranteed to emit a 'completed' message on each open 'request' channel — a productivity/guardedness obligation in a coinductive setting. The variant function is the structural-recursion measure proving productivity."
+  },
+  "relationships": [
+    { "type": "conflictsWith", "target": "BPO:0050", "note": "In tension with unconditional Emergency-Pause-Safety: a pause that can freeze withdrawals indefinitely directly negates this guarantee. Resolution is a *bounded* or *forced-exit* pause, recorded as a refinement." },
+    { "type": "dependsOn", "target": "BPO:0080", "note": "Relies on Consensus-Liveness (WF1) of the underlying chain." },
+    { "type": "dependsOn", "target": "BPO:0081", "note": "Relies on Censorship-Resistance / forced-inclusion (WF2)." },
+    { "type": "refinedBy", "target": "BPO:0082", "note": "Refined by L2-specific 'Escape-Hatch / Forced-Withdrawal' which removes the sequencer from the trust path." },
+    { "type": "mitigates", "target": "ATK:permanent-lock-griefing" },
+    { "type": "mitigates", "target": "ATK:single-point-liveness-failure" }
+  ],
+  "attack_surface": [
+    { "class": "single-point-liveness-failure", "pattern": "withdrawal routed through one sequencer/relayer/oracle/admin with no permissionless fallback", "incident_refs": [], "notes": "Most common structural cause; the fix is a fallback path enforced by WF2." },
+    { "class": "unbounded-iteration-dos", "pattern": "withdrawal iterates over an adversary-growable array; gas cost exceeds block limit", "incident_refs": ["SWC-128 class"], "notes": "Violates assumption A3; convert push to pull, cap iteration." },
+    { "class": "pull-payment-revert-grief", "pattern": "withdrawal does a low-level call to a contract that always reverts, bricking a batched payout loop", "incident_refs": ["SWC-113 class"], "notes": "Isolate each payee; favor pull over push." },
+    { "class": "indefinite-pause", "pattern": "guardian pause with no time bound and no forced-exit", "incident_refs": [], "notes": "Direct conflict with BPO:0050; require timelocked auto-unpause or escape hatch." }
+  ],
+  "observability": {
+    "events": ["WithdrawalRequested(u, id, block)", "WithdrawalCompleted(u, id)"],
+    "metrics": ["max age of an open withdrawal request", "p99 request-to-completion latency in blocks", "count of requests open beyond SLA bound"],
+    "invariant_checkpoints": ["no open request older than the protocol's stated bound N when forced-inclusion is available"],
+    "runtime_assertions": ["liveness monitors are off-chain: a watcher asserting bounded completion latency; on-chain you can only assert the *enabling conditions* (e.g. escape hatch is reachable), not 'eventually' itself"],
+    "telemetry": ["alert when any request exceeds the freeze-detection threshold"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Temporal model checking with fairness", "tools": ["TLA+ / TLC", "ProB", "NuSMV", "Spin"], "strength": "bounded-proof", "notes": "Model the protocol + environment + WF1/WF2 fairness; check the LTL/CTL formula. Bounded by state-space size; abstraction needed for unbounded actor sets." },
+      { "approach": "Variant / ranking-function proof", "tools": ["Isabelle/HOL", "Coq", "TLA+ (proof system)", "Dafny (decreases clauses)"], "strength": "proof", "notes": "Discharge productivity via a well-founded measure that strictly decreases each fair step toward completion." },
+      { "approach": "Off-chain liveness monitoring", "tools": ["custom watchers", "Forta-style detection bots"], "strength": "heuristic-evidence", "notes": "Cannot prove liveness; detects freeze empirically and triggers alerts/escape hatch." }
+    ],
+    "testability": ["liveness is not unit-testable in the usual sense; test the ENABLING conditions: escape hatch reachable without sequencer; withdrawal bounded-gas; resubmission eventually included in a fairness-modeled harness"]
+  },
+  "enforcement": {
+    "runtime": ["pull-payment pattern", "per-payee isolation of external calls", "bounded iteration / pagination", "timelocked auto-unpause", "permissionless forced-inclusion / escape hatch"],
+    "static": ["gas-bound analysis of withdrawal paths", "control-flow check that every freeze state has an exit edge"],
+    "design_patterns": ["L2 forced-transaction queue (removes sequencer from liveness path)", "challenge-with-timeout fallbacks", "no single mandatory third party on the exit path"]
+  },
+  "assumptions": [
+    { "kind": "synchrony", "statement": "Underlying chain produces blocks within bounded time (partial synchrony).", "discharged_by": "BPO:0080" },
+    { "kind": "honest-majority", "statement": "Consensus liveness holds (e.g. <1/3 or <1/2 adversarial depending on protocol).", "discharged_by": "BPO:0080" },
+    { "kind": "environmental", "statement": "User can pay inclusion fees and resubmit; mempool not perpetually censoring.", "discharged_by": "BPO:0081" },
+    { "kind": "economic", "statement": "Per-withdrawal work is bounded independent of adversary-controlled state growth.", "discharged_by": null }
+  ],
+  "provenance": {
+    "authors": ["BPO seed"],
+    "created": "2026-05-20",
+    "confidence": "draft",
+    "sources": ["Alpern & Schneider (1985), liveness", "Lamport, fairness & TLA+", "rollup escape-hatch design literature"],
+    "notes": "The conflictsWith BPO:0050 edge is intentional and pedagogically central: unconditional liveness and unconditional emergency-pause safety are genuinely incompatible; real systems pick a *bounded* compromise, which BPO records as an explicit refinement rather than hiding the tension."
+  }
+}

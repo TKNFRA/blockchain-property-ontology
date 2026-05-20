@@ -1,0 +1,46 @@
+{
+  "@context": {
+    "bpo":  "https://bpo.spec/ns#",
+    "skos": "http://www.w3.org/2004/02/skos/core#",
+    "owl":  "http://www.w3.org/2002/07/owl#",
+    "dct":  "http://purl.org/dc/terms/",
+    "prov": "http://www.w3.org/ns/prov#",
+
+    "id":    "@id",
+    "Property": "bpo:Property",
+
+    "slug":  "skos:notation",
+    "title": "dct:title",
+    "status": "bpo:status",
+    "version": "owl:versionInfo",
+    "supersedes": { "@id": "dct:replaces", "@type": "@id" },
+
+    "aliases":        "skos:altLabel",
+    "academic_terms": "skos:hiddenLabel",
+    "industry_terms": "skos:altLabel",
+
+    "modal_class":            { "@id": "bpo:modalClass" },
+    "deontic_role":           { "@id": "bpo:deonticRole" },
+    "domains":                { "@id": "bpo:domain", "@type": "@id", "@context": { "@base": "https://bpo.spec/ontology/" } },
+    "abstraction_levels":     { "@id": "bpo:abstractionLevel" },
+    "verification_modalities":{ "@id": "bpo:verificationModality" },
+
+    "descriptions": "bpo:descriptions",
+    "semantic":     "bpo:semanticDescription",
+    "formalization":"bpo:formalization",
+
+    "relationships": "bpo:hasRelationship",
+    "target": { "@id": "bpo:relTarget", "@type": "@id" },
+
+    "refines":      { "@id": "bpo:refines",      "@type": "@id" },
+    "implies":      { "@id": "bpo:implies",      "@type": "@id" },
+    "composesWith": { "@id": "bpo:composesWith", "@type": "@id" },
+    "conflictsWith":{ "@id": "bpo:conflictsWith","@type": "@id" },
+    "dependsOn":    { "@id": "bpo:dependsOn",    "@type": "@id" },
+    "mitigates":    { "@id": "bpo:mitigates",    "@type": "@id" },
+
+    "assumptions": "bpo:assumption",
+    "provenance":  "prov:wasAttributedTo"
+  },
+  "@comment": "Projecting each property JSON file through this context yields RDF triples. bpo:refines is declared owl:TransitiveProperty in the ontology; SKOS broader/narrower carry the domain poly-hierarchy. This is what makes the corpus queryable via SPARQL and consumable by OWL reasoners / SHACL validators alongside the JSON-Schema validation used for authoring."
+}

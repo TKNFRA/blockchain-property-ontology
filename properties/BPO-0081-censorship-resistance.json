@@ -1,0 +1,73 @@
+{
+  "id": "BPO:0081",
+  "slug": "censorship-resistance",
+  "title": "Censorship Resistance (Permissionless Forced Inclusion)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["forced inclusion", "anti-censorship", "inclusion fairness"],
+    "academic_terms": ["strong fairness on inclusion", "liveness against an adaptive censor"],
+    "industry_terms": ["L1 force-inclusion queue", "no permanent transaction exclusion"],
+    "external_refs": {}
+  },
+  "classification": {
+    "modal_class": ["liveness", "guarantee-liveness-conditional"],
+    "deontic_role": ["guarantee", "assumption"],
+    "domains": ["consensus", "mempool", "rollup"],
+    "abstraction_levels": ["protocol", "systemic"],
+    "verification_modalities": ["model-checking", "interactive-theorem-proving"],
+    "decidability": "computationally-conditional"
+  },
+  "descriptions": {
+    "semantic": "A valid, sufficiently-fee-paying transaction that is persistently resubmitted cannot be excluded indefinitely by any minority of block producers, by a single sequencer, or by mempool-level filtering: there exists a permissionless inclusion path reachable without the cooperation of any specific privileged party. For rollups this is typically an L1 forced-inclusion queue that bypasses the sequencer.",
+    "system_theoretic": "A strong-fairness liveness constraint: an inclusion action that is enabled infinitely often (the user keeps resubmitting with adequate fee) is eventually taken. It strengthens raw block-production liveness (BPO:0080), which guarantees SOME progress but not the inclusion of a SPECIFIC user's transaction against an active censor.",
+    "security": "The foundation of self-custody under adversarial operators: without it, a sequencer or proposer cartel can selectively freeze targeted users while the chain appears live. It is the assumption that BPO:0002 (eventual withdrawal) and BPO:0082 (escape hatch) lean on to defeat single-operator liveness failure.",
+    "execution_semantics": "Realized by: proposer/builder competition (a censoring minority cannot hold the slot forever), inclusion lists, and — for L2 — an L1-enforced queue where a transaction submitted on L1 MUST be processed by the rollup within a bounded delay or the rollup's state is considered invalid. Violations: single mandatory sequencer, no L1 fallback, fee-market exclusion of a targeted account.",
+    "formal_verification": "A liveness property requiring STRONG fairness; model-checkable (TLA+ with strong fairness) for the protocol abstraction. The correctness of the forced-inclusion mechanism itself (that an L1-queued tx is provably required on L2) is a SAFETY obligation, SMT/Certora-checkable."
+  },
+  "formalization": {
+    "signature": "tx with adequate fee; enabled include(tx,s): inclusion is possible in state s; included(tx).",
+    "first_order_logic": "Strong-fairness inclusion:  ( □◇ enabled include(tx) ) → ◇ included(tx).\nForced path:  ∀ adversary controlling a minority of producers (or the sole sequencer) . ∃ inclusion path not requiring that adversary's cooperation.",
+    "temporal_logic": {
+      "ltl": "( G F enabled(include(tx)) ) → F included(tx)   -- strong fairness",
+      "fairness": "STRONG fairness on the inclusion action; plus BPO:0080 weak fairness on L1 block production for the forced path."
+    },
+    "hoare": [ { "pre": "tx force-submitted on L1 with adequate fee", "command": "rollup processes ≤ N blocks", "post": "tx included or rollup state invalid" } ],
+    "state_machine": "Producer-rotation / forced-queue automaton; the property is that no infinite run excludes a continuously-enabled inclusion action.",
+    "type_theoretic": "Strong-fairness scheduling obligation; productivity of inclusion against an adaptive scheduler."
+  },
+  "relationships": [
+    { "type": "composesWith", "target": "BPO:0080", "note": "Block-production liveness + censorship-resistance ⇒ inclusion of a specific tx." },
+    { "type": "refinedBy", "target": "BPO:0082", "note": "The L2 escape hatch is the rollup-specific realization of forced inclusion for withdrawals." },
+    { "type": "mitigates", "target": "ATK:censorship" },
+    { "type": "mitigates", "target": "ATK:sequencer-exclusion" }
+  ],
+  "attack_surface": [
+    { "class": "single-sequencer-exclusion", "pattern": "sole sequencer drops a targeted user's transactions; no L1 fallback", "incident_refs": [], "notes": "Mandate an L1 forced-inclusion queue with bounded delay." },
+    { "class": "proposer-cartel-censorship", "pattern": "a colluding proposer subset filters transactions", "incident_refs": [], "notes": "Inclusion lists / proposer competition; bounded by the honest-minority assumption." },
+    { "class": "fee-market-exclusion", "pattern": "targeted account priced out or filtered at the relay/builder layer", "incident_refs": [], "notes": "Protocol-enforced inclusion independent of relay policy." }
+  ],
+  "observability": {
+    "events": ["ForcedTxQueued(tx, deadline)", "ForcedTxProcessed(tx)"],
+    "metrics": ["max age of a queued forced tx vs deadline", "count of forced txs past deadline (target: 0)"],
+    "invariant_checkpoints": ["no queued forced tx exceeds the mandatory inclusion deadline"],
+    "runtime_assertions": ["rollup state-validity tied to processing the forced queue within N blocks"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Strong-fairness model checking", "tools": ["TLA+/TLC", "Ivy"], "strength": "bounded-proof", "notes": "Check inclusion under strong fairness against a censoring scheduler." },
+      { "approach": "Forced-queue safety proof", "tools": ["Certora", "Halmos", "KEVM"], "strength": "proof", "notes": "Prove an L1-queued tx is mandatory for L2 validity — the safety half." }
+    ],
+    "testability": ["sequencer-down scenario still allows L1-forced withdrawal", "queued tx beyond deadline invalidates state in test harness"]
+  },
+  "enforcement": {
+    "runtime": ["L1 forced-inclusion queue with bounded deadline", "inclusion lists"],
+    "static": ["proof that forced-queue processing gates state validity"],
+    "design_patterns": ["no single mandatory operator on the inclusion path", "permissionless fallback submission"]
+  },
+  "assumptions": [
+    { "kind": "honest-majority", "statement": "At most a minority of L1 block producers censor (the honest minority can include).", "discharged_by": "BPO:0080" },
+    { "kind": "environmental", "statement": "User can pay L1 inclusion fees and resubmit.", "discharged_by": null }
+  ],
+  "provenance": { "authors": ["BPO seed"], "created": "2026-05-20", "confidence": "draft", "sources": ["inclusion-list / forced-inclusion designs", "rollup security literature"], "notes": "Discharge target for BPO:0002's censorship-resistance assumption; refined by BPO:0082 for L2 exits." }
+}

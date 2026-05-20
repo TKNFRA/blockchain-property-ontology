@@ -1,0 +1,73 @@
+{
+  "id": "BPO:0030",
+  "slug": "storage-layout-isolation",
+  "title": "Storage Layout Isolation & Preservation (Proxy / Delegatecall / Upgrade)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["no storage collision", "namespaced storage", "diamond storage isolation", "layout preservation across upgrades"],
+    "academic_terms": ["heap separation", "memory region disjointness", "data refinement of storage maps"],
+    "industry_terms": ["EIP-1967 proxy slots", "ERC-7201 namespaced storage", "EIP-2535 diamond storage", "append-only storage upgrades"],
+    "external_refs": { "swc": ["SWC-124 Write to Arbitrary Storage Location"], "cwe": ["CWE-787 Out-of-bounds Write", "CWE-668 Exposure of Resource to Wrong Sphere"], "eip": ["EIP-1967", "EIP-1822", "EIP-2535", "ERC-7201"] }
+  },
+  "classification": {
+    "modal_class": ["safety", "observational-determinism"],
+    "deontic_role": ["invariant", "guarantee"],
+    "domains": ["upgradeability", "storage", "evm"],
+    "abstraction_levels": ["bytecode", "contract"],
+    "verification_modalities": ["smt", "static-dataflow", "model-checking", "abstract-interpretation"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "Each logical state variable of a contract (and of every implementation reachable by delegatecall) maps to a stable, non-overlapping storage slot. No write through one logical name can alias the slot of another, no proxy/implementation pair shares a slot it does not intend to, and no upgrade relocates an existing variable. Layout is collision-free at any instant and preserved (append-only) across upgrades.",
+    "system_theoretic": "An injectivity-and-stability constraint on the slot-assignment function σ: Var → Slot. Collision-freedom is injectivity of σ; isolation across delegatecall is disjointness of the proxy's and implementation's private footprints; preservation is a refinement relation σ_v ⊑ σ_{v'} between successive layouts that keeps every previously-assigned slot fixed.",
+    "security": "A violated slot mapping is an arbitrary-storage-write primitive: an attacker (or an innocent struct reordering) can overwrite the admin slot, the implementation pointer, a balance, a role set, or a reentrancy lock — silently, without invoking the function that nominally owns that data. It is the substrate beneath proxy takeover and uninitialized-proxy bricking.",
+    "execution_semantics": "EVM storage is a flat 2^256 keyword-addressed map; Solidity assigns slots by declaration order (sequential) or by hashed namespace (ERC-7201) / struct pointer (diamond). Collisions arise from: declaration-order drift between proxy and implementation, struct field reordering on upgrade, hash-namespace coincidence (negligible if derived correctly), and direct assembly sstore. Delegatecall executes implementation code against the proxy's storage, so both must agree on σ for shared variables and be disjoint elsewhere.",
+    "formal_verification": "A safety property reducible to SMT/dataflow: prove σ injective over declared variables and disjoint across the delegatecall pair, and prove the upgrade diff is a layout-preserving extension. Separation logic gives the cleanest proof structure (disjoint heap footprints)."
+  },
+  "formalization": {
+    "signature": "Var the set of logical variables; Slot = {0..2^256-1}; σ: Var → Slot the layout. For a proxy P and implementation I sharing storage via delegatecall: σ_P, σ_I.",
+    "first_order_logic": "Collision-freedom:  ∀ v,w ∈ Var . v ≠ w → σ(v) ≠ σ(w).\nDelegatecall isolation:  (∀ v ∈ Shared . σ_P(v) = σ_I(v))  ∧  (∀ v ∈ Priv_P, w ∈ Priv_I . σ_P(v) ≠ σ_I(w)).\nUpgrade preservation (impl version n → n+1):  ∀ v ∈ dom(σ_n) . σ_{n+1}(v) = σ_n(v)   (append-only).",
+    "temporal_logic": { "ltl": "G( ∀ slot . writes-to(slot) originate only from the unique variable v with σ(v)=slot )", "fairness": "n/a" },
+    "hoare": [ { "pre": "layout σ injective ∧ disjoint(P,I)", "command": "delegatecall I.f()", "post": "only Shared ∪ Priv_I slots intended by f are mutated; Priv_P untouched" } ],
+    "state_machine": "Model storage as a heap; each function's footprint is a slot set. The property is the frame condition that distinct logical regions have disjoint footprints across the full call composition.",
+    "type_theoretic": "Separation logic: storage isolation is the assertion `proxyState * implState * sharedState` where `*` enforces disjointness; a write respecting σ preserves the separating conjunction. ERC-7201 realizes this by typing each module's storage as a distinct named region rooted at keccak256(namespace)−1 masked to a 256-aligned base.",
+    "algebraic": "σ is a partial injection Var ↪ Slot; the upgrade order forms a refinement poset under ⊑ = graph-inclusion; well-formed upgrades are monotone in this poset."
+  },
+  "relationships": [
+    { "type": "composesWith", "target": "BPO:0040", "note": "Access control assumes its role/admin slots are not aliasable; isolation discharges that." },
+    { "type": "composesWith", "target": "BPO:0020", "note": "The reentrancy mutex's integrity depends on its slot not being collidable." },
+    { "type": "mitigates", "target": "ATK:storage-collision" },
+    { "type": "mitigates", "target": "ATK:proxy-takeover" },
+    { "type": "mitigates", "target": "ATK:uninitialized-proxy" }
+  ],
+  "attack_surface": [
+    { "class": "proxy-implementation-collision", "pattern": "proxy and implementation declare variables in incompatible order; an implementation write lands on the proxy admin/impl slot", "incident_refs": [], "notes": "EIP-1967 fixes the admin/impl/beacon slots at pseudo-random constants to avoid this." },
+    { "class": "uninitialized-proxy", "pattern": "implementation left uninitialized; attacker initializes, becomes owner, and can selfdestruct or upgrade", "incident_refs": ["Parity multisig wallet freeze (2017) — VERIFIED historical incident (uninitialized library + selfdestruct)"], "notes": "Cross-references BPO:0040 initializer guard." },
+    { "class": "struct-reorder-on-upgrade", "pattern": "reordering or inserting a field in a storage struct shifts every subsequent variable's slot", "incident_refs": [], "notes": "Append-only discipline + automated layout diff prevents this." },
+    { "class": "diamond-slot-collision", "pattern": "two facets/modules derive overlapping storage bases", "incident_refs": [], "notes": "Maps directly to the storage-slot-collision error class raised by diamond/modular-kernel storage validators; ERC-7201 namespacing is the mitigation." }
+  ],
+  "observability": {
+    "events": ["Upgraded(implementation)", "AdminChanged"],
+    "metrics": ["layout-diff delta between successive implementations (should be append-only)"],
+    "invariant_checkpoints": ["σ injective at deploy", "post-upgrade: prefix of σ unchanged", "EIP-1967 admin/impl slots hold expected values"],
+    "runtime_assertions": ["initializer one-shot guard", "namespace base equals keccak256(ns)−1 masked"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Layout diff & collision check", "tools": ["OpenZeppelin Upgrades plugin", "Slither (upgradeability/storage checks)"], "strength": "high-coverage-evidence", "notes": "Detects non-append-only layout changes and proxy/impl mismatch." },
+      { "approach": "Slot-level semantic proof", "tools": ["KEVM / K-framework", "Certora (storage-split rules)", "hevm"], "strength": "proof", "notes": "Proves no write reaches a foreign slot across delegatecall — the only level that catches assembly sstore." },
+      { "approach": "Deploy-time / runtime kernel checks", "tools": ["diamond/modular-kernel storage validators (slot-collision and selector-clash checks)"], "strength": "high-coverage-evidence", "notes": "Rejects an install/upgrade that would collide." }
+    ],
+    "testability": ["fuzz: write each variable, assert no other variable observes the write", "upgrade simulation preserves prior reads"]
+  },
+  "enforcement": {
+    "runtime": ["ERC-7201 namespaced storage", "diamond storage structs", "initializer one-shot modifier"],
+    "static": ["automated layout diff in CI gating upgrades", "assembly sstore audit"],
+    "design_patterns": ["EIP-1967 fixed slots", "append-only variable declaration", "per-module namespaced storage roots"]
+  },
+  "assumptions": [
+    { "kind": "tooling", "statement": "Compiler assigns slots deterministically and as documented (declaration order / namespace formula).", "discharged_by": "BPO:0060" }
+  ],
+  "provenance": { "authors": ["BPO seed"], "created": "2026-05-20", "confidence": "draft", "sources": ["EIP-1967, EIP-2535, ERC-7201", "Parity wallet post-mortems", "separation logic (Reynolds, O'Hearn)"], "notes": "Primary discharge target for BPO:0001/0020 storage assumptions and a natural integration anchor for diamond/modular upgradeable frameworks (ERC-7201 / slot-collision checks)." }
+}

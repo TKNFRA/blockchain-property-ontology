@@ -1,0 +1,80 @@
+{
+  "id": "BPO:0101",
+  "slug": "conservation-of-value",
+  "title": "Conservation of Value (System-Wide Accounting Invariant)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["value conservation", "no value creation ex nihilo", "accounting consistency", "global balance invariant"],
+    "academic_terms": ["resource conservation", "frame-preserving accounting", "invariant of a closed economic system"],
+    "industry_terms": ["assets equal liabilities", "no phantom value", "reserve consistency"],
+    "external_refs": { "dasp": ["DASP-3 Arithmetic (when caused by rounding)"] }
+  },
+  "classification": {
+    "modal_class": ["safety"],
+    "deontic_role": ["invariant", "guarantee"],
+    "domains": ["defi", "token", "application", "rwa"],
+    "abstraction_levels": ["economic", "systemic", "contract"],
+    "verification_modalities": ["smt", "symbolic-execution", "abstract-interpretation", "model-checking", "fuzzing"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "The total accounted value held by a system (across all balances, pools, vaults, and obligations, measured in a canonical accounting unit) changes only through explicitly sanctioned flows — authorized issuance/burn and external deposit/withdrawal — and is otherwise conserved. No internal operation creates or destroys value; in particular liabilities never silently exceed assets.",
+    "system_theoretic": "A conservation law on the system's value measure V: State → ℝ≥0 (or a per-asset vector): V is invariant under all internal transitions and changes by exactly the signed external/issuance flow under sanctioned ones. Solvency (assets ≥ liabilities) is a refinement of this law restricted to the claims structure.",
+    "security": "The economic root invariant from which most DeFi safety descends. Its violation is value leakage or fabrication: inflation (no-unauthorized-mint failure, BPO:0001), rounding drains, share-price manipulation (donation/inflation attacks), reentrancy double-spend (BPO:0020), and oracle-induced phantom value. A protocol that conserves value cannot be drained by accounting alone.",
+    "execution_semantics": "Concretely tracked as relations like totalSupply == Σ balances, vault.totalAssets == Σ user claims (modulo fees), reserves == backing. Violations live in: rounding that does not conserve, fee accounting that mints unbacked shares, mints/burns not reflected in the measure, and cross-pool flows that drop a term.",
+    "formal_verification": "A 1-safety state invariant, SMT/Certora-checkable: prove V is preserved by every internal transition and updated correctly by sanctioned flows. Solvency adds the inequality assets ≥ liabilities as a strengthened invariant. Rounding requires interval/abstract-interpretation reasoning to bound directionality (round in the protocol's favor)."
+  },
+  "formalization": {
+    "signature": "Value measure V: State → ℝ≥0 (per-asset: Vector). Sanctioned flows: deposit d, withdraw w, mint m, burn b. Internal ⊆ Op (everything else).",
+    "first_order_logic": "Internal conservation:  ∀ s,s',o . ( o ∈ Internal ∧ s --[o]--> s' ) → V(s') = V(s).\nSanctioned update:  ∀ s,s' . s --[flow]--> s' → V(s') = V(s) + d − w + m − b.\nSolvency (refinement):  ∀ reachable s . assets(s) ≥ liabilities(s).",
+    "temporal_logic": { "ltl": "G( V == externalNetInflow + initialValue )   ∧   G( assets ≥ liabilities )", "fairness": "n/a" },
+    "hoare": [
+      { "pre": "V = K ∧ o ∈ Internal", "command": "o(...)", "post": "V = K" },
+      { "pre": "assets ≥ liabilities", "command": "any sanctioned op", "post": "assets ≥ liabilities" }
+    ],
+    "state_machine": "Annotate each transition with its value delta; the property is that internal transitions carry delta 0 and sanctioned ones carry exactly their declared signed flow; solvency is the reachable-state predicate assets ≥ liabilities.",
+    "type_theoretic": "Value as a conserved linear resource: internal operations are typed as resource-preserving rearrangements (no creation/destruction), sanctioned flows consume/produce an explicit external-flow witness.",
+    "algebraic": "(Value, +) commutative monoid (or module per-asset); V is the monoid fold over holdings; internal transitions are automorphisms preserving the fold."
+  },
+  "relationships": [
+    { "type": "refinedBy", "target": "BPO:0001", "note": "No-unauthorized-mint is the issuance leg of conservation (the m term is gated)." },
+    { "type": "composesWith", "target": "BPO:0020", "note": "Reentrancy is a principal mechanism that breaks conservation via double-spend." },
+    { "type": "dependsOn", "target": "BPO:0040", "note": "Sanctioned flows (mint/burn/admin sweeps) must be access-controlled." },
+    { "type": "mitigates", "target": "ATK:value-leak" },
+    { "type": "mitigates", "target": "ATK:share-inflation" },
+    { "type": "mitigates", "target": "ATK:rounding-drain" }
+  ],
+  "attack_surface": [
+    { "class": "inflation-mint", "pattern": "unbacked supply increase (BPO:0001 failure) breaks assets=liabilities", "incident_refs": [], "notes": "Refinement leg BPO:0001." },
+    { "class": "share-inflation-donation", "pattern": "first-depositor / donation attack manipulates share price so later deposits round to zero shares", "incident_refs": ["UNVERIFIED: ERC-4626 vault inflation-attack class"], "notes": "Virtual shares/assets offset; round in protocol favor." },
+    { "class": "rounding-drain", "pattern": "rounding direction lets repeated ops siphon dust until material", "incident_refs": [], "notes": "Always round against the user / in the protocol's favor; bound cumulative error." },
+    { "class": "fee-accounting-mint", "pattern": "fee logic mints shares not backed by assets", "incident_refs": [], "notes": "Conservation must include the fee term explicitly." },
+    { "class": "oracle-phantom-value", "pattern": "manipulated price inflates measured value, enabling over-borrow", "incident_refs": [], "notes": "Solvency refinement depends on oracle integrity (future BPO node)." }
+  ],
+  "observability": {
+    "events": ["per-asset flow events", "supply/reserve update events"],
+    "metrics": ["V drift between consecutive states (internal ops: 0)", "assets − liabilities (≥ 0)", "cumulative rounding residual"],
+    "invariant_checkpoints": ["post-tx: V == expected", "assets ≥ liabilities", "totalSupply == Σ balances"],
+    "runtime_assertions": ["assert(assets >= liabilities) on state-changing ops", "assert value-delta == declared flow"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Global accounting invariant", "tools": ["Certora Prover", "Halmos"], "strength": "proof", "notes": "Prove V preserved by internal ops and updated correctly by flows; prove assets ≥ liabilities inductively." },
+      { "approach": "Invariant fuzzing", "tools": ["Echidna", "Foundry invariant tests"], "strength": "high-coverage-evidence", "notes": "Stateful handlers with random flows; assert conservation/solvency invariants." },
+      { "approach": "Rounding-direction abstract interpretation", "tools": ["interval analysis", "Certora with ghost residuals"], "strength": "bounded-proof", "notes": "Bound cumulative rounding and prove it cannot be drained." }
+    ],
+    "testability": ["random op sequences preserve V and solvency", "donation/first-depositor attack cannot mint free shares", "rounding never favors the user"]
+  },
+  "enforcement": {
+    "runtime": ["solvency assert on state-changing ops", "virtual shares/assets to resist inflation", "round against the user"],
+    "static": ["invariant proofs in CI", "fee/flow terms explicit in the accounting model"],
+    "design_patterns": ["single canonical value measure", "explicit external-flow witnesses", "conservative rounding policy"]
+  },
+  "assumptions": [
+    { "kind": "tooling", "statement": "Checked arithmetic so the value measure cannot wrap.", "discharged_by": "BPO:0060" },
+    { "kind": "trust", "statement": "Sanctioned-flow authorities (mint/burn/admin) are correctly controlled.", "discharged_by": "BPO:0040" },
+    { "kind": "economic", "statement": "Price/oracle inputs to the value measure are accurate (for the solvency refinement).", "discharged_by": null }
+  ],
+  "provenance": { "authors": ["BPO seed"], "created": "2026-05-20", "confidence": "draft", "sources": ["double-entry accounting invariants", "ERC-4626 inflation-attack analyses", "DeFi solvency-invariant practice"], "notes": "Economic root; parent (via refinedBy) of BPO:0001 and of future solvency/collateralization/liquidation/reserve-consistency children." }
+}

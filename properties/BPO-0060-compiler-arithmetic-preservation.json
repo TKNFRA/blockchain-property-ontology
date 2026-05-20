@@ -1,0 +1,71 @@
+{
+  "id": "BPO:0060",
+  "slug": "compiler-arithmetic-semantic-preservation",
+  "title": "Compiler Arithmetic Semantic Preservation (Source → IR → Bytecode)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["checked-arithmetic preservation", "no optimizer-induced wrap", "translation validation (arithmetic fragment)"],
+    "academic_terms": ["compiler correctness (CompCert-style simulation)", "semantic preservation", "observational equivalence of source and target"],
+    "industry_terms": ["solc optimizer correctness", "IR equivalence", "deterministic / reproducible compilation"],
+    "external_refs": { "cwe": ["CWE-682 Incorrect Calculation", "CWE-191 Integer Underflow", "CWE-190 Integer Overflow"] }
+  },
+  "classification": {
+    "modal_class": ["safety", "observational-determinism"],
+    "deontic_role": ["guarantee", "assumption"],
+    "domains": ["compiler", "interpreter", "evm"],
+    "abstraction_levels": ["ir", "bytecode"],
+    "verification_modalities": ["interactive-theorem-proving", "smt", "symbolic-execution", "model-checking"],
+    "decidability": "computationally-conditional"
+  },
+  "descriptions": {
+    "semantic": "For every source program, the bytecode the compiler emits exhibits the same observable arithmetic behaviour as the source-level semantics: a checked operation that overflows/underflows at source level reverts in the emitted code under exactly the same conditions; operand widths and signedness are preserved; and no optimization pass silently introduces wrap-around, reordering, or strength-reduction that changes a result or a revert condition. Compilation is also deterministic (same input → same bytecode).",
+    "system_theoretic": "A forward (and ideally backward) simulation between the source-level transition system and the target (EVM) transition system: there exists a relation R between source and target states, preserved by stepping, such that related states produce equivalent observable arithmetic events. Restricted here to the arithmetic fragment of the full compiler-correctness statement.",
+    "security": "Downstream value-safety properties (no-unauthorized-mint, conservation) are stated and verified at the source level but EXECUTE as bytecode. If the compiler does not preserve arithmetic semantics, a source-level proof of 'this cannot overflow' is vacuous against the deployed artifact. This property is the bridge that lets source-level assurance transfer to on-chain behaviour.",
+    "execution_semantics": "Solidity ≥0.8 emits explicit overflow/underflow checks (revert) for checked arithmetic; `unchecked{}` blocks and inline assembly opt out. The optimizer (legacy + Yul/IR pipeline) rewrites code; a miscompilation is an optimizer transformation that is not semantics-preserving (e.g. eliding a check, mis-modeling a cleanup, mis-handling a corner constant).",
+    "formal_verification": "Established by (a) a once-and-for-all proof of compiler correctness in a proof assistant (CompCert paradigm), rarely available for production EVM compilers, or more practically (b) TRANSLATION VALIDATION per compilation: prove the specific source and the specific emitted bytecode are equivalent (symbolic equivalence / SMT), and (c) differential testing against a reference semantics. It is computationally conditional because full equivalence is undecidable in general; per-program bounded equivalence is tractable."
+  },
+  "formalization": {
+    "signature": "⟦·⟧_src : Program → (Input → Behaviour); compile : Program → Bytecode; ⟦·⟧_evm : Bytecode → (Input → Behaviour); Behaviour includes return value, revert, and gas-relevant observables.",
+    "first_order_logic": "Semantic preservation (arithmetic fragment):  ∀ P, in . ⟦P⟧_src(in) ≈_arith ⟦compile(P)⟧_evm(in),  where ≈_arith equates results and revert-on-overflow conditions for arithmetic operations.\nDeterminism:  ∀ P . compile(P) is a function (same flags ⇒ identical bytes).",
+    "temporal_logic": { "ltl": "n/a (relational/equivalence property, not temporal-trace)", "fairness": "n/a" },
+    "hoare": [ { "pre": "source op a+b with a+b > MAX (checked)", "command": "emitted bytecode for a+b", "post": "revert (matching source)" } ],
+    "state_machine": "Product of source and target machines with a simulation relation R; the property is that R is a (forward) simulation: related states step to related states with equivalent arithmetic observables.",
+    "type_theoretic": "Type preservation + a logical relation: well-typed source of integer type Tₙ compiles to target operations respecting Tₙ's width; the logical relation at integer type relates values that are equal modulo the (preserved) width discipline.",
+    "algebraic": "Source checked-arithmetic is the partial operation on ℤ that is undefined (reverts) outside [0, 2ⁿ); the target must implement the SAME partial operation, not the total mod-2ⁿ ring operation."
+  },
+  "relationships": [
+    { "type": "composesWith", "target": "BPO:0030", "note": "Storage-layout preservation is the sibling compiler-correctness fragment for state, not arithmetic." },
+    { "type": "mitigates", "target": "ATK:optimizer-miscompilation" },
+    { "type": "mitigates", "target": "ATK:silent-overflow-wrap" }
+  ],
+  "attack_surface": [
+    { "class": "optimizer-miscompilation", "pattern": "an optimizer pass elides a bounds check or mis-rewrites arithmetic, changing results or revert behaviour", "incident_refs": ["Solidity compiler known-bugs list (Yul optimizer / cleanup / constant-folding classes) — VERIFY specific entries before citing"], "notes": "Argues for pinning compiler versions and re-validating on upgrade." },
+    { "class": "unchecked-block-misuse", "pattern": "developer-elided checks in unchecked{}/assembly reintroduce wrap; preservation holds but the spec the developer relied on does not", "incident_refs": [], "notes": "Property preserved; the WRONG source semantics was chosen. Cross-ref BPO:0001 assumption." },
+    { "class": "non-reproducible-build", "pattern": "metadata/path/flag nondeterminism yields differing bytecode, breaking verifiable builds", "incident_refs": [], "notes": "Deterministic compilation is part of this property." }
+  ],
+  "observability": {
+    "events": [],
+    "metrics": ["differential-test divergence count (compiled vs reference semantics)", "bytecode reproducibility hash stability"],
+    "invariant_checkpoints": ["per-release: emitted checks present for all checked ops", "pinned compiler hash matches"],
+    "runtime_assertions": ["on-chain: redundant post-condition asserts as defense-in-depth"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Executable semantics + symbolic equivalence", "tools": ["KEVM / K-framework", "hevm (equivalence checking)"], "strength": "proof", "notes": "Symbolically prove source-derived and emitted bytecode agree on the arithmetic fragment for a given program." },
+      { "approach": "Differential testing vs reference semantics", "tools": ["solc fuzzers", "EVM reference test suites"], "strength": "high-coverage-evidence", "notes": "Random programs/inputs compared against a trusted semantics; finds optimizer regressions." },
+      { "approach": "Mechanized compiler-correctness proof", "tools": ["Coq (CompCert paradigm)", "Isabelle/HOL"], "strength": "proof", "notes": "Strongest but seldom available for production EVM toolchains." }
+    ],
+    "testability": ["overflow at source ⇒ revert in deployed bytecode", "same source+flags ⇒ identical bytecode", "optimizer on/off observationally equivalent on arithmetic"]
+  },
+  "enforcement": {
+    "runtime": ["redundant on-chain assertions for critical arithmetic (defense-in-depth)"],
+    "static": ["pin and hash compiler version + flags", "reproducible-build verification", "re-run translation validation on compiler upgrade"],
+    "design_patterns": ["prefer checked arithmetic; isolate and audit unchecked{}/assembly", "verifiable on-chain bytecode matching"]
+  },
+  "assumptions": [
+    { "kind": "tooling", "statement": "The reference EVM semantics used for validation faithfully models the deployed client's execution.", "discharged_by": null },
+    { "kind": "trust", "statement": "The compiler binary used is the audited/pinned one (supply-chain integrity).", "discharged_by": null }
+  ],
+  "provenance": { "authors": ["BPO seed"], "created": "2026-05-20", "confidence": "draft", "sources": ["Leroy, Formal verification of a realistic compiler (CompCert)", "translation validation (Pnueli et al.)", "KEVM"], "notes": "Primary discharge target for the arithmetic assumption of BPO:0001. Storage-layout preservation tracked separately under BPO:0030." }
+}

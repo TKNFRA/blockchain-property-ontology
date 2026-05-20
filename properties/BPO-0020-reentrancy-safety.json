@@ -1,0 +1,77 @@
+{
+  "id": "BPO:0020",
+  "slug": "reentrancy-safety",
+  "title": "Reentrancy Safety (State Consistency Across External-Call Boundaries)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["checks-effects-interactions", "no reentrant exploitation", "call-boundary atomicity"],
+    "academic_terms": ["effect atomicity", "serializability of nested invocations", "non-interference of re-entrant frames"],
+    "industry_terms": ["reentrancy guard", "read-only reentrancy safety", "cross-function reentrancy safety"],
+    "external_refs": { "swc": ["SWC-107 Reentrancy"], "cwe": ["CWE-841 Improper Enforcement of Behavioral Workflow"], "dasp": ["DASP-1 Reentrancy"] }
+  },
+  "classification": {
+    "modal_class": ["safety", "hypersafety"],
+    "deontic_role": ["invariant", "guarantee"],
+    "domains": ["evm", "contract", "access-control"],
+    "abstraction_levels": ["contract", "bytecode"],
+    "verification_modalities": ["smt", "symbolic-execution", "model-checking", "static-dataflow", "runtime-verification"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "When a contract makes an external call (which may hand control to untrusted code), no re-entrant invocation can observe or exploit a transiently inconsistent internal state to extract value or violate an invariant. The externally observable effect of each invocation is equivalent to some execution in which the invocation completed before any nested re-entry began.",
+    "system_theoretic": "Two complementary readings. (1) LOCK reading — a mutual-exclusion safety invariant: the guarded critical region is never concurrently active in two stack frames. (2) ATOMICITY reading — a 2-safety hyperproperty: the interleaved (re-entrant) execution is observationally equivalent to a serialized one, i.e. nested frames do not interfere. The lock reading is a sound (stronger) approximation of the atomicity reading.",
+    "security": "Defends every contract that performs an external call while holding unsettled internal accounting (balances marked-for-payout, shares pending burn, oracle reads pending update). Violation is value extraction by recursive re-entry (classic same-function), by entering a sibling function (cross-function), by re-entering across contracts (cross-contract), or by reading stale state during the callback window (read-only reentrancy).",
+    "execution_semantics": "Manifests at CALL/DELEGATECALL/STATICCALL boundaries and at ERC-20/721/777/1155 transfer hooks that yield control to the recipient. The violation window is the interval between an external call and the settlement of the state changes it logically depends on. Effects-before-interactions collapses this window to empty.",
+    "formal_verification": "The lock formulation is a 1-safety state invariant, directly SMT-/symbolic-checkable. The atomicity formulation is a 2-safety hyperproperty requiring self-composition (compare the re-entrant schedule against the serialized one) or an invariant asserting the critical state predicate holds at every external-call site."
+  },
+  "formalization": {
+    "signature": "State s; predicate inGuarded(s): the mutex is held; CriticalInv(s): the contract's value-accounting invariant. External-call sites are distinguished transition labels callₖ.",
+    "first_order_logic": "Lock safety:  ∀ reachable s . ¬( inGuarded(s) ∧ aboutToEnterGuarded(s) ).\nEffects-before-interactions:  ∀ external-call site callₖ . CriticalInv holds in the pre-state of callₖ  (i.e. all state mutations the call depends on are already committed).",
+    "temporal_logic": {
+      "ltl": "G( externalCall → CriticalInv )   and   G( enterGuarded → ¬locked )  with  locked toggled across the region.",
+      "fairness": "None — pure safety."
+    },
+    "hoare": [
+      { "pre": "CriticalInv ∧ ¬locked", "command": "withdraw(): effects; lock; external call; unlock", "post": "CriticalInv" }
+    ],
+    "state_machine": "A two-token mutex automaton composed with the contract LTS: states {free, held}; entering the guarded region requires `free`, sets `held`; any transition attempting to enter the guarded region from `held` is absent from the LTS. The property asserts no such absent edge is reachable.",
+    "type_theoretic": "Re-entrancy safety corresponds to a uniqueness/affine-resource discipline: the right to be inside the critical region is a non-duplicable token; an external call temporarily relinquishes no claim on committed state. In separation-logic terms, the call site frames out the contract's invariant-bearing footprint so callee code cannot touch it.",
+    "hyperproperty": "Atomicity = observational equivalence between the re-entrant interleaving and a serial schedule; a 2-safety property verifiable by self-composition of the call graph."
+  },
+  "relationships": [
+    { "type": "composesWith", "target": "BPO:0001", "note": "A reentrant mint/credit callback must not bypass the supply guard or double-credit." },
+    { "type": "composesWith", "target": "BPO:0101", "note": "Reentrancy is a principal mechanism by which conservation-of-value is broken (double withdrawal)." },
+    { "type": "mitigates", "target": "ATK:reentrancy" },
+    { "type": "mitigates", "target": "ATK:read-only-reentrancy" }
+  ],
+  "attack_surface": [
+    { "class": "single-function-reentrancy", "pattern": "external call before balance decrement; callee recursively re-enters withdraw", "incident_refs": ["The DAO (2016) — VERIFIED historical incident, canonical example"], "notes": "Closed by effects-before-interactions and/or a nonReentrant mutex." },
+    { "class": "cross-function-reentrancy", "pattern": "callback enters a sibling function that shares the inconsistent state", "incident_refs": [], "notes": "A per-function lock is insufficient; the guard must cover the shared-state group." },
+    { "class": "read-only-reentrancy", "pattern": "during the callback window a view function returns stale state, mispricing a dependent protocol", "incident_refs": ["UNVERIFIED: multiple DeFi oracle/price read-only reentrancy findings"], "notes": "View functions are not write-protected by a mutex; consumers must read post-settlement or use reentrancy-aware getters." },
+    { "class": "cross-contract-reentrancy", "pattern": "shared mutable state across contracts re-entered via a third contract", "incident_refs": [], "notes": "Requires reasoning about the whole trust cluster, not a single contract." }
+  ],
+  "observability": {
+    "events": ["per-call depth counter", "guard enter/exit traces"],
+    "metrics": ["max call-stack depth into guarded regions", "count of external calls preceding state settlement"],
+    "invariant_checkpoints": ["CriticalInv asserted at every external-call site pre-state", "mutex == free at top-level entry"],
+    "runtime_assertions": ["nonReentrant modifier", "assert(!_locked) on guarded entry"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Invariant-at-call-site rule", "tools": ["Certora Prover", "Halmos"], "strength": "proof", "notes": "Prove CriticalInv holds in the pre-state of every external call; covers cross-function/read-only variants the mutex-only check misses." },
+      { "approach": "Reentrancy dataflow detection", "tools": ["Slither", "Mythril"], "strength": "heuristic-evidence", "notes": "Flags state writes after external calls; high recall, some false positives." },
+      { "approach": "Self-composition for atomicity", "tools": ["relational verifier", "hevm"], "strength": "bounded-proof", "notes": "Discharges the 2-safety atomicity reading directly." }
+    ],
+    "testability": ["malicious receiver that re-enters reverts or cannot gain", "balance conserved under randomized re-entrant callbacks (Echidna handler)"]
+  },
+  "enforcement": {
+    "runtime": ["nonReentrant mutex (covering the full shared-state group)", "pull-payment instead of push", "transient-storage (EIP-1153) reentrancy lock"],
+    "static": ["effects-before-interactions enforced by linter", "call-site invariant obligations"],
+    "design_patterns": ["checks-effects-interactions", "single settlement sink", "reentrancy-aware oracle reads"]
+  },
+  "assumptions": [
+    { "kind": "environmental", "statement": "The mutex storage cannot be reset out-of-band by a delegatecall/storage-collision path.", "discharged_by": "BPO:0030" }
+  ],
+  "provenance": { "authors": ["BPO seed"], "created": "2026-05-20", "confidence": "draft", "sources": ["Clarkson & Schneider (2010) hyperproperties", "checks-effects-interactions folklore", "The DAO post-mortems"], "notes": "Lock formulation soundly over-approximates atomicity; record both so verifiers can choose." }
+}

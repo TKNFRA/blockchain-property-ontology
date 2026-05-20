@@ -1,0 +1,76 @@
+{
+  "id": "BPO:0082",
+  "slug": "l2-escape-hatch",
+  "title": "L2 Escape Hatch (Sequencer-Independent Forced Withdrawal)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["forced withdrawal", "self-sequencing exit", "L1 escape", "rollup exit guarantee"],
+    "academic_terms": ["trust-minimized exit", "L1-only liveness for withdrawal"],
+    "industry_terms": ["escape hatch", "force-withdraw via L1", "sequencer-bypass exit"],
+    "external_refs": {}
+  },
+  "classification": {
+    "modal_class": ["liveness", "guarantee-liveness-conditional"],
+    "deontic_role": ["guarantee", "temporal-commitment"],
+    "domains": ["rollup", "bridge", "cross-chain"],
+    "abstraction_levels": ["protocol", "contract"],
+    "verification_modalities": ["model-checking", "smt", "interactive-theorem-proving"],
+    "decidability": "computationally-conditional"
+  },
+  "descriptions": {
+    "semantic": "A rollup user can recover their funds to L1 within a bounded time using only L1 liveness and a proof of their L2 balance/state — without the cooperation of the sequencer, operator, or any L2-side privileged party. The exit path's liveness depends ONLY on the underlying L1 (and its forced-inclusion guarantee), removing every L2 single point of liveness failure.",
+    "system_theoretic": "The L2-specific refinement of eventual-withdrawal (BPO:0002): it WEAKENS the assumption set from 'sequencer + L2 consensus are live' down to 'L1 is live and censorship-resistant', by providing an L1-rooted transition sequence (force-include → prove balance → withdraw) that completes regardless of L2 operator behaviour.",
+    "security": "The decisive trust-minimization property for L2s: it converts 'trust the sequencer not to freeze you' into 'trust only L1'. It also reconciles the pause/liveness tension (BPO:0050 ⨯ BPO:0002): an emergency pause may halt the sequencer, but the escape hatch keeps exit available, so the pause is bounded-by-construction in its effect on user funds.",
+    "execution_semantics": "Mechanism: user submits a forced-withdrawal transaction to an L1 contract (using the forced-inclusion queue, BPO:0081); after a bounded challenge/finalization window, the user proves their L2 balance against a finalized state commitment (validity proof or fraud-proof-backed root) and the L1 contract releases funds. Violations: missing escape hatch, exit gated by the sequencer, unbounded challenge window, exit provability dependent on sequencer-published data without a fallback.",
+    "formal_verification": "Decompose: (LIVENESS) the exit completes under L1 fairness only — model-check with fairness restricted to L1; (SAFETY) the balance-proof verification on L1 is sound and only releases funds the user actually holds — SMT/Certora/KEVM. The liveness half rests on BPO:0080+0081; the safety half is self-contained."
+  },
+  "formalization": {
+    "signature": "L1 state; L2 finalized state-root R; user balance bal_L2(u); forceWithdraw(u, proof); challenge window Δ.",
+    "first_order_logic": "Sequencer-independent exit:  ∀ u . entitledL2(u) → ◇ ( fundsOnL1(u) )  using only L1-enabled actions (forceInclude, proveBalance, withdraw).\nExit safety:  withdraw(u, π) succeeds → π is a valid inclusion proof of bal_L2(u) against a finalized R, and the released amount = bal_L2(u).\nBounded delay:  completion within ≤ Δ + L1-inclusion-bound.",
+    "temporal_logic": {
+      "ltl": "G( entitledL2(u) → F_{≤ Δ+b} fundsOnL1(u) )",
+      "fairness": "Weak fairness on L1 block production (BPO:0080) + strong fairness on L1 forced inclusion (BPO:0081). NO fairness assumption on the L2 sequencer."
+    },
+    "hoare": [ { "pre": "entitledL2(u) ∧ sequencer offline/malicious", "command": "forceInclude; proveBalance(π); withdraw", "post": "fundsOnL1(u) within bounded time" } ],
+    "state_machine": "L1-rooted exit automaton: states {pending, forced, proven, withdrawn}; every edge is enabled by L1-only actions; the sequencer appears nowhere on the path. The property is that `withdrawn` is reachable from `pending` for every entitled user using only L1-enabled edges within ≤ Δ+b.",
+    "type_theoretic": "An assumption-weakening refinement: the exit's liveness obligation is reparented from the (untrusted) sequencer capability to the (assumed-live) L1 capability."
+  },
+  "relationships": [
+    { "type": "refines", "target": "BPO:0002", "note": "Realizes eventual-withdrawal in the L2 setting with a strictly weaker (L1-only) assumption set." },
+    { "type": "composesWith", "target": "BPO:0050", "note": "Reconciles the pause/liveness tension: pause may halt the sequencer but the escape hatch keeps exit available, bounding the pause's effect on funds." },
+    { "type": "dependsOn", "target": "BPO:0080", "note": "Relies on L1 consensus liveness only." },
+    { "type": "dependsOn", "target": "BPO:0081", "note": "Relies on L1 forced inclusion to defeat sequencer censorship of the exit." },
+    { "type": "mitigates", "target": "ATK:single-point-liveness-failure" },
+    { "type": "mitigates", "target": "ATK:sequencer-fund-freeze" }
+  ],
+  "attack_surface": [
+    { "class": "missing-escape-hatch", "pattern": "withdrawals only via sequencer; no L1-rooted exit", "incident_refs": [], "notes": "The defining failure; the property mandates an L1-only path." },
+    { "class": "unbounded-challenge-window", "pattern": "exit gated behind an unbounded or extendable dispute period", "incident_refs": [], "notes": "Bound Δ; ensure it cannot be griefed open." },
+    { "class": "data-availability-dependent-exit", "pattern": "proving one's balance requires sequencer-published data with no DA fallback", "incident_refs": [], "notes": "Requires data-availability guarantees / fallback reconstruction." },
+    { "class": "exit-proof-soundness-gap", "pattern": "L1 contract releases funds on an unsound balance proof", "incident_refs": [], "notes": "Safety half: verify the proof-checking on L1 (cross-ref BPO:0070)." }
+  ],
+  "observability": {
+    "events": ["ForcedWithdrawalInitiated(u)", "BalanceProven(u, R)", "Withdrawn(u, amount)"],
+    "metrics": ["initiation-to-withdrawal latency vs Δ+b bound", "open forced withdrawals past bound (target: 0)"],
+    "invariant_checkpoints": ["exit reachable with sequencer offline", "released amount == proven L2 balance"],
+    "runtime_assertions": ["L1 contract verifies inclusion proof against a finalized root before release"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "L1-only liveness model checking", "tools": ["TLA+/TLC"], "strength": "bounded-proof", "notes": "Restrict fairness to L1; show exit completes with the sequencer modeled as fully adversarial/offline." },
+      { "approach": "Exit-proof safety verification", "tools": ["Certora", "Halmos", "KEVM"], "strength": "proof", "notes": "Prove the L1 withdrawal releases exactly the proven balance against a finalized commitment." }
+    ],
+    "testability": ["sequencer offline ⇒ user still exits within bound", "invalid balance proof rejected", "challenge window cannot be extended indefinitely"]
+  },
+  "enforcement": {
+    "runtime": ["L1 forced-withdrawal contract", "bounded challenge/finalization window", "inclusion-proof verification on L1"],
+    "static": ["proof that exit path contains no sequencer-gated edge", "DA fallback for balance reconstruction"],
+    "design_patterns": ["L1-rooted exit automaton", "sequencer-independent provability", "bounded dispute period"]
+  },
+  "assumptions": [
+    { "kind": "synchrony", "statement": "L1 is live (produces blocks within bounded time).", "discharged_by": "BPO:0080" },
+    { "kind": "environmental", "statement": "L2 state data needed to prove balances is available (DA holds or is reconstructible).", "discharged_by": null }
+  ],
+  "provenance": { "authors": ["BPO seed"], "created": "2026-05-20", "confidence": "draft", "sources": ["rollup escape-hatch / forced-withdrawal designs", "L2 trust-assumption frameworks"], "notes": "Refines BPO:0002 by reparenting its liveness obligation to L1-only assumptions, and supplies the mechanism that reconciles BPO:0050 (pause) with BPO:0002 (exit)." }
+}

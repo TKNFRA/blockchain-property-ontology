@@ -1,0 +1,69 @@
+{
+  "id": "BPO:0072",
+  "slug": "public-auditability",
+  "title": "Public Auditability (Verifiable Transparency of State-Affecting Actions)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["transparency", "trustless verifiability", "public verifiability"],
+    "academic_terms": ["public verifiability", "accountability", "transparency property"],
+    "industry_terms": ["everything on-chain is auditable", "verifiable state", "proof-of-reserves verifiability"],
+    "external_refs": {}
+  },
+  "classification": {
+    "modal_class": ["safety"],
+    "deontic_role": ["guarantee", "obligation"],
+    "domains": ["governance", "crypto-protocol", "application", "rwa"],
+    "abstraction_levels": ["protocol", "systemic", "governance"],
+    "verification_modalities": ["model-checking", "static-dataflow", "runtime-verification"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "Every state-affecting action of consequence is accompanied by a publicly available, independently verifiable record sufficient for any party to reconstruct or check that the action conformed to policy — without relying on a trusted insider. Auditability is the precondition for trustless verification, dispute resolution, and accountability.",
+    "system_theoretic": "An observability constraint on the LTS: each consequential transition emits an externally checkable witness (event, commitment, or proof) such that an external monitor can decide policy conformance from the public trace alone.",
+    "security": "Underpins trust-minimization: solvency claims, governance legitimacy, and bridge correctness are only meaningful if independently checkable. The tension with privacy (BPO:0003) is real and is resolved NOT by weakening either, but by selective disclosure — publishing commitments plus zero-knowledge proofs that the hidden data satisfies the audited policy.",
+    "execution_semantics": "Realized through events/logs, on-chain commitments (Merkle roots, polynomial commitments), and verifiable proofs. Failure modes: consequential state changes with no emitted record, off-chain-only data with no on-chain commitment, or 'audit' that requires trusting the operator's API.",
+    "formal_verification": "Checkable as a safety/observability obligation: prove that every consequential transition emits a record from which an external verifier can decide conformance. Combined with ZK, the obligation becomes 'emits a sound proof of conformance' (delegating to BPO:0070)."
+  },
+  "formalization": {
+    "signature": "Consequential ⊆ Op; record(o): the public witness emitted by o; Verify_ext(record, policy) ∈ {0,1} computable by any external party.",
+    "first_order_logic": "Auditability:  ∀ s,s',o . ( o ∈ Consequential ∧ s --[o]--> s' ) → ( emits(o, r) ∧ ( Verify_ext(r, policy) = 1 ↔ conformant(o) ) ).\nWith privacy:  r is a commitment c plus a proof π s.t. KnowledgeSound(π) (BPO:0070) attests conformant(o) without revealing the secret witness (BPO:0003).",
+    "temporal_logic": { "ltl": "G( consequentialAction → publiclyVerifiableRecord )", "fairness": "n/a" },
+    "hoare": [ { "pre": "o ∈ Consequential", "command": "o(...)", "post": "an externally verifiable record of o's policy-conformance is public" } ],
+    "state_machine": "Each consequential edge is annotated with an emitted observable; the property is that the public projection of the trace is sufficient to decide conformance.",
+    "type_theoretic": "Declassification policy: auditability is a controlled-release obligation — exactly the policy-relevant predicate is made Low-observable (possibly via a proof), the rest may remain High (private)."
+  },
+  "relationships": [
+    { "type": "conflictsWith", "target": "BPO:0003", "note": "Full transparency and full witness-privacy are in direct tension on the same data; selective disclosure (commitment + ZK proof) is the standard reconciliation." },
+    { "type": "dependsOn", "target": "BPO:0070", "note": "Auditing a ZK-mediated action relies on the proof being knowledge-sound." },
+    { "type": "mitigates", "target": "ATK:opaque-insider-action" },
+    { "type": "mitigates", "target": "ATK:unverifiable-reserves" }
+  ],
+  "attack_surface": [
+    { "class": "silent-state-change", "pattern": "a consequential mutation emits no event/commitment; external parties cannot detect or verify it", "incident_refs": [], "notes": "Mandate events/commitments on all consequential ops." },
+    { "class": "off-chain-only-data", "pattern": "critical data lives off-chain with no on-chain commitment; 'audit' reduces to trusting an API", "incident_refs": [], "notes": "Commit roots on-chain; publish data availability." },
+    { "class": "fake-transparency", "pattern": "proof-of-reserves snapshot that omits liabilities or double-counts", "incident_refs": [], "notes": "Audit must bind BOTH assets and liabilities (cross-ref BPO:0101)." }
+  ],
+  "observability": {
+    "events": ["domain events for every consequential action", "commitment-root updates"],
+    "metrics": ["fraction of consequential ops with verifiable records", "time-to-availability of audit data"],
+    "invariant_checkpoints": ["no consequential selector lacks an emitted record", "published roots match recomputed roots"],
+    "runtime_assertions": ["emit-or-revert on consequential paths"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Emission-coverage analysis", "tools": ["Slither", "Certora (event/record obligations)"], "strength": "high-coverage-evidence", "notes": "Prove every consequential transition emits its record." },
+      { "approach": "External re-verification harness", "tools": ["custom verifiers", "data-availability checkers"], "strength": "high-coverage-evidence", "notes": "Independently recompute conformance from the public trace." }
+    ],
+    "testability": ["every consequential action produces a record an external party can verify", "published commitments match recomputation"]
+  },
+  "enforcement": {
+    "runtime": ["mandatory events/commitments", "on-chain proof verification for private actions"],
+    "static": ["emission-coverage check"],
+    "design_patterns": ["commitment + selective-disclosure ZK proof", "on-chain data-availability commitments", "bind assets AND liabilities in reserve proofs"]
+  },
+  "assumptions": [
+    { "kind": "environmental", "statement": "Published data / commitments are actually available (data availability holds).", "discharged_by": null }
+  ],
+  "provenance": { "authors": ["BPO seed"], "created": "2026-05-20", "confidence": "draft", "sources": ["public-verifiability definitions", "selective-disclosure / proof-of-reserves designs"], "notes": "Exists to host the privacy↔transparency tension and demonstrate reconciliation by selective disclosure rather than weakening either property." }
+}

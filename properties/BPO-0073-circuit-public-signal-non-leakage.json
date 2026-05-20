@@ -1,0 +1,70 @@
+{
+  "id": "BPO:0073",
+  "slug": "circuit-public-signal-non-leakage",
+  "title": "Circuit Public-Signal Non-Leakage (Information-Flow Refinement of ZK)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["no witness leakage through public signals", "output non-leakage", "circuit confidentiality"],
+    "academic_terms": ["non-interference (declassification-bounded)", "information-flow security of arithmetic circuits"],
+    "industry_terms": ["public inputs reveal nothing secret", "minimal public surface"],
+    "external_refs": {}
+  },
+  "classification": {
+    "modal_class": ["hypersafety", "non-interference"],
+    "deontic_role": ["guarantee"],
+    "domains": ["zk-circuit", "zk", "zkvm"],
+    "abstraction_levels": ["cryptographic", "contract"],
+    "verification_modalities": ["smt", "static-dataflow", "interactive-theorem-proving"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "Each public (exposed) signal of an arithmetic circuit is independent of the secret part of the witness beyond what membership in the relation legitimately declassifies. Two witnesses that satisfy the relation for the same intended public statement must induce identical public signals — so an observer of the public signals learns nothing secret-specific.",
+    "system_theoretic": "The circuit-level, statically-checkable refinement of zero-knowledge (BPO:0003): a non-interference constraint between the High-labelled (secret witness) inputs and the Low-labelled (public) signals of the circuit, modulo the declassification policy 'the statement is in the language'.",
+    "security": "Catches the most common circuit privacy bug: a public output that is an invertible or partially-invertible function of secret data (e.g. exposing a value whose preimage is the secret, or a commitment with too little blinding). It is narrower than full ZK — it does not certify the proof-system protocol's hiding — but it is mechanically checkable and high-yield.",
+    "execution_semantics": "Audit the map (witness → public signals): any dependence of a public signal on the secret witness, beyond the declassified predicate, is a leak. Insufficient blinding, exposed intermediate values, or debugging outputs left public are typical sources.",
+    "formal_verification": "A 2-safety (non-interference) property verifiable by self-composition + SMT: instantiate the circuit twice with witnesses that agree on the public statement but differ on secrets, and prove the public signals coincide. Decidable for fixed circuits over the field arithmetic."
+  },
+  "formalization": {
+    "signature": "Circuit C with inputs partitioned into wpub (public) and wsec (secret); public outputs y = pubsig_C(wpub, wsec).",
+    "first_order_logic": "Non-interference (declassification-bounded):  ∀ wsec, wsec', wpub . ( sat_R(wpub,wsec) ∧ sat_R(wpub,wsec') ) → pubsig_C(wpub,wsec) = pubsig_C(wpub,wsec').",
+    "temporal_logic": { "ltl": "n/a (relational/hyperproperty)", "fairness": "n/a" },
+    "hoare": [],
+    "state_machine": "Self-composed circuit C × C sharing wpub; assert equality of public outputs across the two secret assignments — the standard k-safety reduction.",
+    "type_theoretic": "Information-flow typing: wsec : High, wpub & outputs : Low; the typing judgment forbids High→Low flow except the declassification `sat_R`. A well-typed circuit in this discipline satisfies the property by construction.",
+    "hyperproperty": "A 2-execution non-interference property in the hypersafety class; reduced to safety by self-composition."
+  },
+  "relationships": [
+    { "type": "refines", "target": "BPO:0003", "note": "Circuit-granular, statically checkable refinement of the simulator-based ZK privacy property." },
+    { "type": "dependsOn", "target": "BPO:0074", "note": "Full hiding still rests on the proof system's hardness/blinding assumptions; this property covers only the public-signal map." },
+    { "type": "mitigates", "target": "ATK:witness-leakage" },
+    { "type": "mitigates", "target": "ATK:public-output-leakage" }
+  ],
+  "attack_surface": [
+    { "class": "public-output-leakage", "pattern": "a public signal is an invertible function of the secret witness", "incident_refs": [], "notes": "Audit injectivity of the witness→public map; minimize exposed signals." },
+    { "class": "insufficient-blinding", "pattern": "exposed commitment with too little randomness; secret recoverable", "incident_refs": [], "notes": "Adequate fresh blinding per proof." },
+    { "class": "debug-signal-left-public", "pattern": "intermediate/debug signal accidentally exposed as public", "incident_refs": [], "notes": "Review the public-input list against intent." }
+  ],
+  "observability": {
+    "events": [],
+    "metrics": ["measured dependence (on synthetic witnesses) of each public signal on secret inputs (target: none beyond declassification)"],
+    "invariant_checkpoints": ["each public signal proven independent of wsec given wpub"],
+    "runtime_assertions": ["n/a (static/circuit-level property)"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Self-composition non-interference check", "tools": ["Halmos/SMT over the circuit", "relational verifiers"], "strength": "bounded-proof", "notes": "Prove public outputs invariant under varying secrets that share the public statement." },
+      { "approach": "Information-flow typing", "tools": ["circuit IFC analyzers", "Coda / Coq"], "strength": "proof", "notes": "Reject circuits with disallowed High→Low flow." }
+    ],
+    "testability": ["vary secret witness with fixed valid public statement; assert identical public signals"]
+  },
+  "enforcement": {
+    "runtime": ["adequate per-proof blinding"],
+    "static": ["IFC labelling of signals", "minimize and review public-signal surface"],
+    "design_patterns": ["declassify only the relation predicate", "no debug/intermediate signals exposed"]
+  },
+  "assumptions": [
+    { "kind": "cryptographic", "statement": "The proof system itself is hiding (full ZK rests on BPO:0003 + BPO:0074); this property covers only the public-signal map.", "discharged_by": "BPO:0074" }
+  ],
+  "provenance": { "authors": ["BPO seed"], "created": "2026-05-20", "confidence": "draft", "sources": ["Sabelfeld & Myers (IFC survey)", "self-composition for k-safety (Barthe et al.)"], "notes": "The mechanically-checkable refinement that lets engineering tooling approach the otherwise reduction-only ZK privacy property." }
+}

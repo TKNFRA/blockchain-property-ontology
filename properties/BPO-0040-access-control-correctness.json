@@ -1,0 +1,77 @@
+{
+  "id": "BPO:0040",
+  "slug": "access-control-correctness",
+  "title": "Access Control Correctness (Authority, Monotonicity, Revocation)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["authorization soundness", "role separation", "privilege monotonicity", "revocation correctness", "admin boundedness", "capability isolation"],
+    "academic_terms": ["reference-monitor completeness", "principle of least authority", "non-bypassability"],
+    "industry_terms": ["onlyRole / onlyOwner correctness", "no privilege escalation", "RBAC integrity"],
+    "external_refs": { "swc": ["SWC-105 Unprotected critical function", "SWC-115 tx.origin authorization", "SWC-100 Function default visibility"], "cwe": ["CWE-284 Improper Access Control", "CWE-269 Improper Privilege Management", "CWE-862 Missing Authorization"], "dasp": ["DASP-2 Access Control"] }
+  },
+  "classification": {
+    "modal_class": ["safety"],
+    "deontic_role": ["invariant", "guarantee", "policy", "capability", "permission"],
+    "domains": ["access-control", "contract", "governance"],
+    "abstraction_levels": ["contract", "protocol"],
+    "verification_modalities": ["smt", "symbolic-execution", "static-dataflow", "model-checking", "type-checking"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "Every privileged operation executes only when invoked by a principal currently holding an authority that the policy admits for that operation; authority is created, delegated, and revoked only along authorized paths; no sequence of permitted operations grants a principal more authority than the policy allows (no escalation); and a revoked authority is ineffective immediately and thereafter. This subsumes role separation, delegated-authority correctness, privilege monotonicity, revocation correctness, and admin boundedness.",
+    "system_theoretic": "A reference-monitor constraint on the LTS: the guard predicate is complete (every privileged transition is gated), non-bypassable (no alternate edge reaches the protected effect ungated), and tamper-evident (the authority configuration changes only via authorized labelled transitions). The authority assignment is an invariant whose only legal mutations are authorized grant/revoke.",
+    "security": "The trust-boundary enforcement of the entire system. Failure yields takeover (attacker gains admin/minter/upgrader), unauthorized state mutation, fund drainage, or governance capture. Most catastrophic contract incidents reduce to an access-control failure at some layer.",
+    "execution_semantics": "Concretely: each privileged selector must revert for an unauthorized msg.sender; grant/revoke selectors are themselves privileged (gated by the role's admin); initialization establishes the initial authority exactly once. Violations: missing/incorrect modifier, default-public visibility, tx.origin checks (phishable), uninitialized owner, mis-set role admin enabling self-grant, signature-auth replay.",
+    "formal_verification": "A 1-safety property checkable as a parametric rule over every method: for each privileged effect, the transition is enabled only if the caller satisfies the authority predicate, and the authority predicate itself changes only via authorized transitions."
+  },
+  "formalization": {
+    "signature": "Principals Prin; Authorities Auth (roles/capabilities); hasAuth: State × Prin × Auth → Bool; policy admits: Op → 2^Auth; privileged ⊆ Op.",
+    "first_order_logic": "Mediation:  ∀ s,s',o,p . ( s --[o by p]--> s' ∧ o ∈ privileged ) → ∃ a ∈ admits(o) . hasAuth(s,p,a).\nConfiguration integrity:  ∀ s,s',t . ( hasAuth(s',p,a) ≠ hasAuth(s,p,a) ∧ s --[t]--> s' ) → ( t ∈ {grant,revoke} ∧ authorizedAdmin(s, t.sender, a) ).\nNo escalation (monotonicity of delegation):  delegated(a') from a ⇒ a' ⊑ a  (derived authority never exceeds the delegator's).\nRevocation effectiveness:  s --[revoke(p,a)]--> s' ⇒ ¬hasAuth(s',p,a).",
+    "temporal_logic": { "ltl": "G( privilegedEffect(o) → authorized(sender,o) )   ∧   G( authChange → authorizedAdmin )", "fairness": "n/a" },
+    "hoare": [
+      { "pre": "¬(∃ a ∈ admits(o) . hasAuth(sender,a))", "command": "o(...)  for o ∈ privileged", "post": "revert ∧ state unchanged" },
+      { "pre": "authorizedAdmin(sender, a)", "command": "grant(p,a)", "post": "hasAuth(p,a)" }
+    ],
+    "state_machine": "An access-control matrix (Lampson) as state; transitions are gated by the reference monitor; the property is that the monitor mediates every protected transition and the matrix mutates only via authorized commands (cf. HRU safety, here decidable because the command set is finite and fixed).",
+    "type_theoretic": "Capabilities as unforgeable affine tokens: a privileged call is well-typed only when supplied a capability witness of the right type; delegation produces a subtype-bounded capability (a' <: a). Role checks are the dynamic residue of this static capability discipline.",
+    "algebraic": "Authorities form a lattice (⊑, ⊔, ⊓) with least authority ⊥; delegation is a meet-bounded operation; admin-of relation is a partial order rooted at the governance authority."
+  },
+  "relationships": [
+    { "type": "composesWith", "target": "BPO:0030", "note": "Authority config (role/admin slots) must be collision-isolated to be tamper-evident." },
+    { "type": "composesWith", "target": "BPO:0050", "note": "Pause/unpause authority is an instance of this policy." },
+    { "type": "composesWith", "target": "BPO:0070", "note": "Upgrade/governance authorization composes with proof/voting integrity." },
+    { "type": "mitigates", "target": "ATK:privilege-escalation" },
+    { "type": "mitigates", "target": "ATK:unauthorized-admin-action" }
+  ],
+  "attack_surface": [
+    { "class": "missing-authorization", "pattern": "privileged function lacks a guard or is default-public", "incident_refs": ["SWC-100 / SWC-105 class"], "notes": "Default-deny enumeration of all privileged selectors." },
+    { "class": "tx-origin-auth", "pattern": "guard checks tx.origin, phishable via an intermediary contract", "incident_refs": ["SWC-115 class"], "notes": "Use msg.sender." },
+    { "class": "uninitialized-authority", "pattern": "owner/admin never set or resettable; attacker claims it", "incident_refs": ["Parity wallet (2017) — VERIFIED"], "notes": "One-shot initializer; cross-ref BPO:0030." },
+    { "class": "role-admin-misconfiguration", "pattern": "a role is its own admin or admin set wrongly, enabling self-grant", "incident_refs": [], "notes": "Audit the role-admin DAG for cycles/self-grant." },
+    { "class": "signature-auth-replay", "pattern": "authorizing signature lacks nonce/chainid/domain, replayable", "incident_refs": [], "notes": "EIP-712 domain separation + nonce." }
+  ],
+  "observability": {
+    "events": ["RoleGranted", "RoleRevoked", "OwnershipTransferred", "Upgraded"],
+    "metrics": ["count of principals per privileged authority (admin boundedness)", "time-to-effect of revocations"],
+    "invariant_checkpoints": ["role-admin DAG acyclic", "exactly-once initialization", "privileged set fully gated"],
+    "runtime_assertions": ["onlyRole/onlyOwner on every privileged path", "initializer guard"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Parametric authorization rule", "tools": ["Certora Prover", "Halmos"], "strength": "proof", "notes": "Every privileged method reverts for an unauthorized caller; authority config mutates only via authorized grant/revoke." },
+      { "approach": "Static guard/visibility analysis", "tools": ["Slither", "Mythril"], "strength": "high-coverage-evidence", "notes": "Detects unprotected functions, tx.origin, default visibility." },
+      { "approach": "Policy model checking", "tools": ["TLA+/TLC", "Alloy"], "strength": "bounded-proof", "notes": "Check no escalation reachable in the access-control matrix; Alloy is well-suited to RBAC structure." }
+    ],
+    "testability": ["unauthorized caller reverts for each privileged op", "revoked principal cannot act", "delegated authority bounded by delegator", "double-init reverts"]
+  },
+  "enforcement": {
+    "runtime": ["role/owner modifiers", "EIP-712 domain-separated signature auth with nonces", "two-step ownership transfer"],
+    "static": ["capability typing", "linter: no privileged effect outside a guarded function"],
+    "design_patterns": ["least authority", "role separation (no super-admin)", "timelocked privileged actions", "bounded/known admin set"]
+  },
+  "assumptions": [
+    { "kind": "environmental", "statement": "Authority storage is collision-isolated and not writable out-of-band.", "discharged_by": "BPO:0030" }
+  ],
+  "provenance": { "authors": ["BPO seed"], "created": "2026-05-20", "confidence": "draft", "sources": ["Lampson access matrix", "Harrison-Ruzzo-Ullman safety", "Saltzer & Schroeder least privilege"], "notes": "Parent of future child properties: role-separation, revocation-correctness, privilege-monotonicity, admin-boundedness (to be split out as specializes-children in a later phase)." }
+}

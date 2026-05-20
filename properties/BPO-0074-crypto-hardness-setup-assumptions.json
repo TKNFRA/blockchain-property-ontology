@@ -1,0 +1,68 @@
+{
+  "id": "BPO:0074",
+  "slug": "cryptographic-hardness-and-setup-assumptions",
+  "title": "Cryptographic Hardness & Trusted-Setup Assumptions",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["computational hardness assumption", "CRS soundness", "no toxic waste", "random-oracle assumption"],
+    "academic_terms": ["DLOG / DDH / q-SDH / knowledge-of-exponent (AGM)", "random oracle model (ROM)", "common reference string (CRS)"],
+    "industry_terms": ["powers-of-tau ceremony", "trusted setup honesty", "transparent setup"],
+    "external_refs": {}
+  },
+  "classification": {
+    "modal_class": ["safety"],
+    "deontic_role": ["cryptographic-assumption", "trust-assumption", "environmental-assumption"],
+    "domains": ["cryptography", "crypto-protocol", "zk", "signatures", "hash"],
+    "abstraction_levels": ["cryptographic"],
+    "verification_modalities": ["cryptographic-proof"],
+    "decidability": "computationally-conditional"
+  },
+  "descriptions": {
+    "semantic": "The computational hardness assumptions a system's security reduces to (e.g. discrete-log, decisional/​computational Diffie-Hellman, q-strong-DH, knowledge-of-exponent in the algebraic group model, random-oracle behaviour of the chosen hash) hold against probabilistic polynomial-time adversaries at the deployed security parameter; and for proof systems with a structured reference string, the setup was generated honestly — at least one ceremony participant was honest and destroyed their secret ('toxic waste'), or the system uses a transparent (setup-free) construction.",
+    "system_theoretic": "Not a behavioural property of the implementation but an ENVIRONMENTAL/cryptographic assumption discharged into other properties (BPO:0003 ZK, BPO:0070 soundness, BPO:0073 leakage, signature validity). It is the boundary at which mechanical verification stops and cryptanalysis / ceremony auditing takes over.",
+    "security": "If an assumption fails — a hardness break (e.g. cryptographically relevant quantum computing for DLOG-based systems), retained toxic waste, under-parameterized security level, or a flawed ceremony — every property reduced to it becomes void simultaneously. This is a systemic single-assumption failure mode and must be tracked explicitly, not buried.",
+    "execution_semantics": "Concretely: curve/field choice and bit-security; hash choice and domain separation for Fiat-Shamir; CRS provenance and ceremony transcript verification; migration posture toward post-quantum or transparent constructions.",
+    "formal_verification": "Cannot be 'verified' by program-analysis tools. It is justified by published cryptanalysis, parameter selection to a target security level, ceremony transcript verification (each contribution attested and chained), and/​or eliminated by choosing transparent setups (FRI/STARK, Bulletproofs). Recorded with discharged_by = null because it is ACCEPTED with justification, not discharged by another property."
+  },
+  "formalization": {
+    "signature": "Security parameter λ; advantage Adv_A(λ) of any PPT adversary A against the assumption game; CRS provenance predicate honestCeremony.",
+    "first_order_logic": "Hardness:  ∀ PPT A . Adv_A(λ) ≤ negl(λ).\nSetup honesty:  honestCeremony  ≡  ∃ participant i . secretᵢ destroyed  (1-of-n honesty)  ∨  transparentSetup.",
+    "temporal_logic": { "ltl": "n/a", "fairness": "n/a" },
+    "hoare": [],
+    "state_machine": "n/a — assumption node, no transition behaviour.",
+    "type_theoretic": "Serves as an axiom in the ambient logic: properties depending on it are theorems of the form `assumption ⊢ guarantee`; the assumption is an undischarged hypothesis in the assurance proof tree."
+  },
+  "relationships": [
+    { "type": "mitigates", "target": "ATK:cryptographic-assumption-failure", "note": "Holding the assumption is exactly the absence of this failure; tracked so its risk is explicit." }
+  ],
+  "attack_surface": [
+    { "class": "hardness-break", "pattern": "algorithmic or quantum advance breaks the assumed-hard problem", "incident_refs": [], "notes": "Maintain crypto-agility and a post-quantum migration path." },
+    { "class": "toxic-waste-retention", "pattern": "a setup participant keeps the CRS trapdoor, enabling forged proofs", "incident_refs": [], "notes": "Multi-party ceremony with public transcripts; prefer transparent setups." },
+    { "class": "under-parameterization", "pattern": "security level chosen too low for the threat horizon", "incident_refs": [], "notes": "Select parameters to a documented bit-security target." },
+    { "class": "rom-instantiation-gap", "pattern": "a scheme proven in the ROM is instantiated with a hash that fails the needed properties", "incident_refs": [], "notes": "Use well-vetted hashes; strong domain separation." }
+  ],
+  "observability": {
+    "events": [],
+    "metrics": ["ceremony participant count and attestation chain", "documented bit-security level"],
+    "invariant_checkpoints": ["ceremony transcript verifies", "parameters meet target security level"],
+    "runtime_assertions": ["n/a"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Cryptanalysis & parameter selection", "tools": ["published cryptanalysis", "security-level estimators"], "strength": "heuristic-evidence", "notes": "Best-effort confidence; assumptions are believed-hard, not proven-hard." },
+      { "approach": "Ceremony transcript verification", "tools": ["powers-of-tau verifiers", "MPC ceremony attestations"], "strength": "high-coverage-evidence", "notes": "Verifies setup honesty under 1-of-n." },
+      { "approach": "Eliminate via transparent setup", "tools": ["FRI/STARK", "Bulletproofs"], "strength": "proof", "notes": "Removes the trusted-setup assumption entirely (hardness assumption remains)." }
+    ],
+    "testability": ["ceremony transcript re-verifies independently", "parameters audited against current cryptanalysis"]
+  },
+  "enforcement": {
+    "runtime": ["pinned, audited verification keys / parameters"],
+    "static": ["document the exact assumption set per security property"],
+    "design_patterns": ["transparent or multi-party setup", "crypto-agility for assumption migration", "explicit assumption ledger in the assurance case"]
+  },
+  "assumptions": [
+    { "kind": "cryptographic", "statement": "This node IS the assumption; it is accepted with documented justification rather than discharged.", "discharged_by": null }
+  ],
+  "provenance": { "authors": ["BPO seed"], "created": "2026-05-20", "confidence": "draft", "sources": ["standard hardness-assumption catalogues", "powers-of-tau ceremony designs", "AGM / ROM literature"], "notes": "Canonical assumption sink: depended on by BPO:0003, BPO:0070, BPO:0073. Exemplifies a deontic ASSUMPTION-role node with null discharge — the kind of undischarged hypothesis an assurance review must surface." }
+}

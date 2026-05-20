@@ -1,0 +1,72 @@
+{
+  "id": "BPO:0070",
+  "slug": "knowledge-soundness",
+  "title": "Knowledge Soundness (Extractability; No Under-Constrained Acceptance)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["proof-of-knowledge", "no false-statement acceptance", "circuit fully-constrained"],
+    "academic_terms": ["knowledge soundness", "witness-extended emulation", "special soundness", "proof of knowledge (PoK)"],
+    "industry_terms": ["no under-constrained signals", "soundness bug", "constraint completeness"],
+    "external_refs": { "other": ["Bellare-Goldreich PoK definition", "Fiat-Shamir / Sigma-protocol special soundness"] }
+  },
+  "classification": {
+    "modal_class": ["safety"],
+    "deontic_role": ["guarantee", "cryptographic-assumption"],
+    "domains": ["zk", "zk-circuit", "crypto-protocol", "zkvm"],
+    "abstraction_levels": ["cryptographic", "contract"],
+    "verification_modalities": ["cryptographic-proof", "smt", "static-dataflow", "interactive-theorem-proving"],
+    "decidability": "computationally-conditional"
+  },
+  "descriptions": {
+    "semantic": "A prover that convinces the verifier of a statement with non-negligible probability must actually 'know' a valid witness — formalized by an efficient extractor that, given black-box (or rewinding) access to such a prover, outputs a witness satisfying the relation. At the circuit level this is the requirement that the constraint system fully pins down the computation: there are no under-constrained signals an adversary could freely set to forge acceptance of a false statement.",
+    "system_theoretic": "An integrity constraint on the proof system viewed as a relation between (statement, proof) pairs and witnesses: the set of statements for which an accepting proof exists equals (up to negligible error) the language of true statements, AND a witness is efficiently recoverable. The 'no free signal' circuit condition is the concrete, checkable surrogate.",
+    "security": "The integrity backbone of any verifiable-computation system (rollup validity proofs, ZK bridges, private payments). Its failure is acceptance of false statements: minting unbacked assets, validating an invalid state transition, double-spending. Distinct from and independent of ZK/privacy (BPO:0003): a system can be sound but leaky, or hiding but unsound.",
+    "execution_semantics": "Manifests in the arithmetization (R1CS, Plonkish, AIR): every output and intermediate signal must be constrained as a deterministic function of inputs; missing constraints (forgotten boolean/range checks, unconstrained inverses or quotients, under-constrained outputs) leave degrees of freedom. The dominant real-world ZK bug is exactly this under-constraint — not a privacy leak.",
+    "formal_verification": "The cryptographic statement (extractor exists) is proved by reduction, mechanizable in EasyCrypt / proof assistants. The circuit surrogate (full constraint / determinism) is checkable by dedicated static analyzers and SMT: prove that the public inputs uniquely determine all signals, i.e. the constraint system has a unique satisfying completion."
+  },
+  "formalization": {
+    "signature": "Relation R ⊆ X×W; argument system (P,V); accept predicate V(x,π)∈{0,1}; circuit C with public inputs xpub, witness signals w, constraints {cᵢ(xpub,w)=0}.",
+    "first_order_logic": "Knowledge soundness:  ∃ PPT extractor E . ∀ P* . Pr[V(x, P*(x))=1] = ε > negl  ⇒  Pr[(x, E^{P*}(x)) ∈ R] ≥ poly(ε) − negl.\nCircuit determinism (surrogate):  ∀ xpub . | { w : ∀i. cᵢ(xpub,w)=0 } |  is consistent with exactly the intended computation  (no spurious satisfying assignment for a false statement); equivalently the constraint system has no under-constrained signal:  ¬∃ free signal s, assignments w,w' agreeing on xpub and all constraints but differing on a value that should be determined.",
+    "temporal_logic": { "ltl": "n/a (relational/computational, not temporal)", "fairness": "n/a" },
+    "hoare": [],
+    "state_machine": "Model the circuit as a constraint relation; soundness = the relation is functional from (public input) to (intended output) — any two satisfying assignments agreeing on public inputs agree on all should-be-determined signals.",
+    "type_theoretic": "Special soundness (k accepting transcripts with a common prefix ⇒ extract a witness) gives a constructive extractor; in Curry-Howard terms the proof object literally contains the witness extractable by the verifier's challenge structure.",
+    "hyperproperty": "The circuit-determinism surrogate is a 2-safety property (two satisfying assignments must agree), verifiable by self-composition + SMT — which is precisely what under-constraint detectors implement."
+  },
+  "relationships": [
+    { "type": "composesWith", "target": "BPO:0003", "note": "Soundness (integrity) and zero-knowledge (privacy) are INDEPENDENT; a complete system needs both." },
+    { "type": "dependsOn", "target": "BPO:0074", "note": "Computational soundness rests on hardness assumptions (and ROM for Fiat-Shamir)." },
+    { "type": "mitigates", "target": "ATK:false-proof-acceptance" },
+    { "type": "mitigates", "target": "ATK:under-constraint" }
+  ],
+  "attack_surface": [
+    { "class": "under-constrained-signal", "pattern": "an output or intermediate signal is not fully constrained; attacker assigns it freely to satisfy a false statement", "incident_refs": ["UNVERIFIED: numerous public circom/Plonkish audit findings of this class"], "notes": "Detect with Picus/Ecne; the single most common ZK bug class." },
+    { "class": "missing-range-or-boolean-check", "pattern": "a signal expected to be a bit or in a range is unconstrained, enabling overflow/aliasing in field arithmetic", "incident_refs": [], "notes": "Add explicit range/boolean constraints." },
+    { "class": "unconstrained-inverse-or-quotient", "pattern": "division/inverse computed in witness without constraining the relation, allowing arbitrary value", "incident_refs": [], "notes": "Constrain a·a⁻¹=1 and the quotient·divisor+remainder relation." },
+    { "class": "weak-fiat-shamir", "pattern": "challenge derived from an incomplete transcript, enabling grinding / soundness break", "incident_refs": ["'Frozen Heart' weak-Fiat-Shamir class — VERIFY scope before citing"], "notes": "Hash the FULL transcript including all public inputs and prior messages." }
+  ],
+  "observability": {
+    "events": ["on-chain verifier accept/reject"],
+    "metrics": ["analyzer-reported count of under-constrained signals (target: 0)", "constraint-to-signal ratio sanity"],
+    "invariant_checkpoints": ["every signal proven determined by public inputs", "Fiat-Shamir transcript completeness"],
+    "runtime_assertions": ["verifier rejects malformed proofs deterministically"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Under-constraint / determinism analysis (circuit surrogate)", "tools": ["Picus", "Ecne", "Veridise circuit analyzers", "circom --inspect"], "strength": "bounded-proof", "notes": "Formally checks every signal is uniquely determined; THIS is where production assurance happens." },
+      { "approach": "Mechanized soundness reduction", "tools": ["EasyCrypt", "Coq (Coda for circuits)", "Lean"], "strength": "proof", "notes": "Proves the extractor exists under stated assumptions." },
+      { "approach": "Differential / metamorphic testing", "tools": ["custom fuzzers over witnesses"], "strength": "heuristic-evidence", "notes": "Search for two distinct witnesses accepted for the same public input (a soundness counterexample)." }
+    ],
+    "testability": ["no two distinct witnesses accepted for one public input", "out-of-range/non-boolean inputs rejected", "false statement cannot produce an accepting proof"]
+  },
+  "enforcement": {
+    "runtime": ["on-chain verifier with audited verification key", "reject malformed proofs"],
+    "static": ["mandatory under-constraint analysis in CI", "explicit range/boolean/inverse constraints"],
+    "design_patterns": ["strong Fiat-Shamir (full transcript binding)", "constrain-then-compute discipline", "audited, reproducible trusted setup or transparent setup"]
+  },
+  "assumptions": [
+    { "kind": "cryptographic", "statement": "Underlying hardness assumptions and (for NIZK) ROM hold at the chosen security level.", "discharged_by": "BPO:0074" }
+  ],
+  "provenance": { "authors": ["BPO seed"], "created": "2026-05-20", "confidence": "draft", "sources": ["Bellare-Goldreich (PoK)", "Groth16 / Plonk soundness analyses", "under-constraint tooling literature (Picus, Ecne)"], "notes": "The integrity dual of BPO:0003. The record deliberately foregrounds under-constraint as the practical failure mode and separates it from the privacy claim." }
+}

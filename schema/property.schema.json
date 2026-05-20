@@ -1,0 +1,209 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bpo.spec/schema/property.schema.json",
+  "title": "BPO Property Record",
+  "description": "Canonical record for a single blockchain-assurance property in the Blockchain Property Ontology (BPO). One file == one property. Designed to be simultaneously human-authored, machine-validated (this schema), and RDF-projectable (see context.jsonld). Required fields are deliberately a small core so the living database can grow incrementally; everything else is schema-defined but optional, to be populated as a property matures from `draft` to `stable`.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "slug", "title", "status", "classification", "descriptions"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^BPO:[0-9]{4,}$",
+      "description": "Opaque, immutable canonical identifier. Semantically meaningless by design (cf. CWE-NNN, Wikidata Q-numbers): reclassification must never force an ID change. Never reuse a retired ID."
+    },
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "Human-readable stable handle. May be revised; `id` is the join key."
+    },
+    "title": { "type": "string" },
+    "version": { "type": "string", "description": "SemVer of this record. MAJOR = semantics of the property changed (breaks downstream proofs); MINOR = facets added; PATCH = editorial." },
+    "status": { "enum": ["draft", "reviewed", "stable", "deprecated", "superseded"] },
+    "supersedes": { "type": "array", "items": { "type": "string", "pattern": "^BPO:[0-9]{4,}$" } },
+
+    "identifiers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "aliases": { "type": "array", "items": { "type": "string" } },
+        "academic_terms": { "type": "array", "items": { "type": "string" } },
+        "industry_terms": { "type": "array", "items": { "type": "string" } },
+        "external_refs": {
+          "type": "object",
+          "description": "Cross-walk to existing registries so BPO sits *beside* CWE/SWC/DASP rather than re-inventing them.",
+          "additionalProperties": false,
+          "properties": {
+            "cwe": { "type": "array", "items": { "type": "string" } },
+            "swc": { "type": "array", "items": { "type": "string" } },
+            "dasp": { "type": "array", "items": { "type": "string" } },
+            "cve": { "type": "array", "items": { "type": "string" } },
+            "eip": { "type": "array", "items": { "type": "string" } },
+            "other": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+
+    "classification": {
+      "type": "object",
+      "description": "Faceted, orthogonal classification. A property is a POINT in this space, not a leaf in a single tree. Axes are independent; each may carry multiple values (a property can be both safety w.r.t. one trace set and a 2-safety hyperproperty).",
+      "additionalProperties": false,
+      "required": ["modal_class", "domains"],
+      "properties": {
+        "modal_class": {
+          "type": "array", "minItems": 1,
+          "items": { "enum": ["safety", "liveness", "hypersafety", "hyperliveness", "k-safety", "observational-determinism", "non-interference", "guarantee-liveness-conditional"] },
+          "description": "Alpern-Schneider trace-property class, extended with Clarkson-Schneider hyperproperties. Critical distinction: privacy/ZK/MEV/fairness properties are HYPERproperties (relate multiple traces) and are NOT verifiable by single-trace reachability tools."
+        },
+        "deontic_role": {
+          "type": "array",
+          "items": { "enum": ["invariant", "assumption", "guarantee", "obligation", "constraint", "policy", "capability", "permission", "temporal-commitment", "cryptographic-assumption", "trust-assumption", "environmental-assumption"] },
+          "description": "Assume/guarantee + deontic role. An `assumption` is something the property RELIES ON (and must be discharged elsewhere); a `guarantee` is what it OFFERS. Mislabeling here is the most common source of unsound composition."
+        },
+        "domains": {
+          "type": "array", "minItems": 1,
+          "items": { "type": "string" },
+          "description": "SKOS concept slugs from ontology/taxonomy (poly-hierarchy). e.g. 'evm', 'zk-circuit', 'defi-lending', 'cross-chain', 'agentic'."
+        },
+        "abstraction_levels": {
+          "type": "array",
+          "items": { "enum": ["bytecode", "ir", "contract", "protocol", "economic", "systemic", "governance", "cryptographic"] }
+        },
+        "verification_modalities": {
+          "type": "array",
+          "items": { "enum": ["smt", "symbolic-execution", "bounded-model-checking", "model-checking", "abstract-interpretation", "interactive-theorem-proving", "type-checking", "runtime-verification", "fuzzing", "cryptographic-proof", "static-dataflow"] }
+        },
+        "decidability": { "enum": ["decidable", "semi-decidable", "undecidable-in-general", "decidable-bounded", "computationally-conditional"], "description": "Honest statement of what is mechanically achievable. Many liveness and all cryptographic-indistinguishability properties are not decidable by automated tools and require ITP or pen-and-paper reduction." }
+      }
+    },
+
+    "descriptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["semantic"],
+      "properties": {
+        "semantic": { "type": "string", "description": "Rigorous, implementation-agnostic English. Facet 1." },
+        "system_theoretic": { "type": "string", "description": "Facet 3: property as a constraint on a transition system / control system." },
+        "security": { "type": "string", "description": "Facet 4." },
+        "execution_semantics": { "type": "string", "description": "Facet 5: how it manifests in concrete execution / where violations live." },
+        "formal_verification": { "type": "string", "description": "Facet 6: the verification-engineer's reading." }
+      }
+    },
+
+    "formalization": {
+      "type": "object",
+      "description": "Facet 2 + 16-19. Multiple logics intentionally; a property is over-determined so downstream tools can pick their native encoding. Strings are LaTeX-ish / tool-syntax; not executed by this schema.",
+      "additionalProperties": false,
+      "properties": {
+        "signature": { "type": "string", "description": "State vocabulary: sorts, functions, predicates the formulae range over." },
+        "first_order_logic": { "type": "string" },
+        "temporal_logic": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "ltl": { "type": "string" }, "ctl": { "type": "string" }, "tla": { "type": "string" }, "fairness": { "type": "string", "description": "Fairness assumptions REQUIRED for any liveness claim to hold; omitting these is a soundness bug." } }
+        },
+        "hoare": { "type": "array", "items": { "type": "object", "additionalProperties": false, "properties": { "pre": { "type": "string" }, "command": { "type": "string" }, "post": { "type": "string" } } } },
+        "state_machine": { "type": "string" },
+        "type_theoretic": { "type": "string", "description": "Facet 19." },
+        "algebraic": { "type": "string" },
+        "hyperproperty": { "type": "string", "description": "Relational/2-safety/simulator formulation when modal_class includes a hyperproperty." }
+      }
+    },
+
+    "relationships": {
+      "type": "array",
+      "description": "Facet 8. Typed edges forming a poly-hierarchical DAG (NOT a tree). Edge semantics defined in schema/relationship.vocab.json.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "target"],
+        "properties": {
+          "type": { "enum": ["refines", "refinedBy", "implies", "impliedBy", "composesWith", "conflictsWith", "dependsOn", "specializes", "generalizes", "equivalentTo", "strengthens", "weakens", "mitigates"] },
+          "target": { "type": "string", "description": "BPO id, or attack-class id for `mitigates`." },
+          "note": { "type": "string" }
+        }
+      }
+    },
+
+    "attack_surface": {
+      "type": "array",
+      "description": "Facet 9.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "class": { "type": "string" },
+          "pattern": { "type": "string" },
+          "incident_refs": { "type": "array", "items": { "type": "string" }, "description": "Curated, must be verified before status>=reviewed; provenance.confidence flags unverified." },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+
+    "observability": {
+      "type": "object",
+      "description": "Facets 10-11.",
+      "additionalProperties": false,
+      "properties": {
+        "events": { "type": "array", "items": { "type": "string" } },
+        "metrics": { "type": "array", "items": { "type": "string" } },
+        "invariant_checkpoints": { "type": "array", "items": { "type": "string" } },
+        "runtime_assertions": { "type": "array", "items": { "type": "string" } },
+        "telemetry": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+
+    "verification": {
+      "type": "object",
+      "description": "Facets 12-13.",
+      "additionalProperties": false,
+      "properties": {
+        "strategies": {
+          "type": "array",
+          "items": { "type": "object", "additionalProperties": false, "properties": {
+            "approach": { "type": "string" },
+            "tools": { "type": "array", "items": { "type": "string" } },
+            "strength": { "enum": ["proof", "bounded-proof", "high-coverage-evidence", "heuristic-evidence"] },
+            "notes": { "type": "string" }
+          } }
+        },
+        "testability": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+
+    "enforcement": {
+      "type": "object",
+      "description": "Facets 14-15.",
+      "additionalProperties": false,
+      "properties": {
+        "runtime": { "type": "array", "items": { "type": "string" } },
+        "static": { "type": "array", "items": { "type": "string" } },
+        "design_patterns": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+
+    "assumptions": {
+      "type": "array",
+      "description": "First-class discharge ledger: every environmental/trust/cryptographic assumption the guarantee rests on. A guarantee is only as strong as its undischarged assumptions; making these explicit is the whole point of assume-guarantee reasoning.",
+      "items": { "type": "object", "additionalProperties": false, "properties": {
+        "kind": { "enum": ["environmental", "trust", "cryptographic", "economic", "synchrony", "honest-majority", "tooling"] },
+        "statement": { "type": "string" },
+        "discharged_by": { "type": ["string", "null"], "description": "BPO id or external proof artifact discharging it. `null` is meaningful: an explicitly accepted but UNDISCHARGED assumption — these are exactly what an assurance review must surface." }
+      } }
+    },
+
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "authors": { "type": "array", "items": { "type": "string" } },
+        "created": { "type": "string", "format": "date" },
+        "reviewed_by": { "type": "array", "items": { "type": "string" } },
+        "confidence": { "enum": ["speculative", "draft", "peer-reviewed", "formally-verified"] },
+        "sources": { "type": "array", "items": { "type": "string" } },
+        "notes": { "type": "string" }
+      }
+    }
+  }
+}

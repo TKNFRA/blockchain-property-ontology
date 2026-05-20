@@ -1,0 +1,79 @@
+{
+  "id": "BPO:0050",
+  "slug": "emergency-pause-safety-bounded",
+  "title": "Emergency Pause Safety (Bounded Halt with Preserved Exit)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["circuit breaker safety", "bounded pause", "guarded halt"],
+    "academic_terms": ["controlled shutdown safety", "fail-safe state reachability"],
+    "industry_terms": ["pausable", "guardian pause", "kill-switch with escape hatch"],
+    "external_refs": { "cwe": ["CWE-693 Protection Mechanism Failure"], "dasp": ["DASP-5 Denial of Service (when unbounded)"] }
+  },
+  "classification": {
+    "modal_class": ["safety", "guarantee-liveness-conditional"],
+    "deontic_role": ["guarantee", "capability", "constraint", "temporal-commitment"],
+    "domains": ["contract", "defi", "governance"],
+    "abstraction_levels": ["contract", "protocol"],
+    "verification_modalities": ["smt", "model-checking", "symbolic-execution"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "When the system is paused, value-moving state transitions are halted (safety); the pause can be entered only by an authorized pauser and lifted only by an authorized path; and — critically for the bounded form — the pause cannot deprive entitled users of their funds indefinitely: it either auto-expires after a bounded delay or always leaves a fund-recovery path (escape hatch) open. The unbounded form (halt with no time limit and no exit) is explicitly NOT this property and conflicts with exit liveness.",
+    "system_theoretic": "A mode-switched LTS with a `paused` control mode in which the transition relation is restricted to non-value-moving (and recovery) transitions, plus a meta-constraint that the system cannot remain in `paused` forever from the perspective of an entitled withdrawal (bounded sojourn or always-available exit edge).",
+    "security": "Pause is a double-edged control: it mitigates an active exploit by freezing damage, but an unbounded or mis-scoped pause is itself an attack surface — admin rug-by-freeze, key-compromise freeze, or incomplete coverage that pauses the wrong half and leaves the exploit live. The bounded form keeps the mitigation while denying the freeze-forever capability.",
+    "execution_semantics": "A `whenNotPaused` modifier gates value-moving functions; pause/unpause are privileged. The bounded guarantee adds either a timelocked auto-unpause (block.timestamp ≥ pausedAt + maxPause ⇒ effectively unpaused) or an always-callable forced-exit that ignores the pause flag for entitled withdrawals.",
+    "formal_verification": "Two obligations: (1) SAFETY — in the paused mode, no value-moving transition is enabled (model-check / SMT over the gated transition set, plus coverage that every value-moving selector is gated). (2) BOUNDED LIVENESS — the paused mode is not a permanent trap for entitled exits; requires the same fairness machinery as BPO:0002 (or a purely structural escape edge whose enabling is mode-independent, which makes it SMT-checkable)."
+  },
+  "formalization": {
+    "signature": "Mode ∈ {active, paused}; valueMoving ⊆ Op; recovery ⊆ Op; pausedAt: timestamp; maxPause: const.",
+    "first_order_logic": "Pause safety:  ∀ s,s',o . ( mode(s)=paused ∧ o ∈ valueMoving ∧ o ∉ recovery ∧ s --[o]--> s' ) → False  (such transitions are absent).\nCoverage:  ∀ o ∈ valueMoving . gatedBy(o, whenNotPaused).\nBounded sojourn:  ∀ s . mode(s)=paused → ◇_{≤ maxPause} ( mode=active ∨ exitAvailable ).\nExit preservation:  ∀ s . entitledWithdrawal(p,s) → enabled(forcedExit(p), s)   (mode-independent).",
+    "temporal_logic": {
+      "ltl": "G( paused → ¬anyValueMove )   ∧   G( paused → F_{bounded} (active ∨ exitTaken) )",
+      "ctl": "AG( paused → AF active )   under the timelock/escape assumption",
+      "fairness": "For the structural-escape variant: none (escape edge is unconditionally enabled). For the auto-unpause variant: weak fairness on the clock/block production (BPO:0080)."
+    },
+    "hoare": [
+      { "pre": "mode = paused", "command": "o ∈ valueMoving \\ recovery", "post": "revert" },
+      { "pre": "entitledWithdrawal(p)", "command": "forcedExit(p)", "post": "funds returned regardless of mode" }
+    ],
+    "state_machine": "Two-mode automaton; `pause` and `unpause` are admin-gated edges; an auto-unpause edge fires when the clock guard holds; a forced-exit edge is enabled in both modes. The property is the conjunction of (no value-move edge from `paused`) and (paused is not absorbing for entitled exits).",
+    "type_theoretic": "The pause capability is a bounded, possibly time-limited capability (a leasing/affine resource with an expiry), distinct from an unbounded admin capability."
+  },
+  "relationships": [
+    { "type": "conflictsWith", "target": "BPO:0002", "note": "The UNBOUNDED pause directly negates eventual-withdrawal. This bounded form is the designed resolution: keep the safety halt, deny freeze-forever." },
+    { "type": "composesWith", "target": "BPO:0082", "note": "An escape hatch realizes the exit-preservation clause and reconciles pause with exit liveness." },
+    { "type": "dependsOn", "target": "BPO:0040", "note": "Pause/unpause authority is governed by access-control correctness." },
+    { "type": "mitigates", "target": "ATK:active-exploit-propagation" },
+    { "type": "mitigates", "target": "ATK:indefinite-freeze", "note": "Only the BOUNDED form mitigates this; the unbounded form CAUSES it." }
+  ],
+  "attack_surface": [
+    { "class": "indefinite-pause", "pattern": "pause with no time bound and no exit; equivalent to seizure of funds", "incident_refs": [], "notes": "The whole reason this property is specified as bounded." },
+    { "class": "incomplete-pause-coverage", "pattern": "some value-moving path not gated; exploit continues while honest users are frozen", "incident_refs": [], "notes": "Coverage obligation: enumerate and gate all value-moving selectors." },
+    { "class": "pause-key-compromise", "pattern": "single guardian key freezes the system maliciously", "incident_refs": [], "notes": "Multisig/timelock the pause authority; keep unpause less privileged or auto." },
+    { "class": "unpause-race", "pattern": "exploit re-fires in the block unpause executes", "incident_refs": [], "notes": "Stage unpause with a cooldown." }
+  ],
+  "observability": {
+    "events": ["Paused(by, at)", "Unpaused(by, at)", "ForcedExit(p)"],
+    "metrics": ["pause duration vs maxPause", "fraction of value-moving selectors gated"],
+    "invariant_checkpoints": ["all value-moving selectors carry whenNotPaused", "forcedExit reachable in paused mode"],
+    "runtime_assertions": ["assert(block.timestamp < pausedAt + maxPause) else auto-unpause"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Pause-coverage + halt safety", "tools": ["Slither (modifier coverage)", "Certora", "Halmos"], "strength": "proof", "notes": "Prove every value-moving method is gated and reverts when paused." },
+      { "approach": "Bounded-liveness model checking", "tools": ["TLA+/TLC", "ProB"], "strength": "bounded-proof", "notes": "Check paused is not absorbing for entitled exits under the clock/escape assumption." }
+    ],
+    "testability": ["all value-moving calls revert when paused", "forcedExit succeeds while paused", "auto-unpause fires after maxPause"]
+  },
+  "enforcement": {
+    "runtime": ["whenNotPaused on all value-moving paths", "timelocked auto-unpause", "always-enabled forcedExit for entitled withdrawals"],
+    "static": ["coverage check that no value-moving selector is ungated"],
+    "design_patterns": ["bounded circuit breaker", "separate (lower) authority for unpause", "escape hatch (BPO:0082)"]
+  },
+  "assumptions": [
+    { "kind": "synchrony", "statement": "Block clock advances so the auto-unpause guard can fire (only for the timelock variant).", "discharged_by": "BPO:0080" },
+    { "kind": "trust", "statement": "Pause authority is not unilaterally controlled by a single untrusted key.", "discharged_by": "BPO:0040" }
+  ],
+  "provenance": { "authors": ["BPO seed"], "created": "2026-05-20", "confidence": "draft", "sources": ["circuit-breaker patterns", "rollup escape-hatch literature"], "notes": "Exists explicitly to host the safety/liveness tension with BPO:0002 and to show BPO records design tensions rather than hiding them." }
+}

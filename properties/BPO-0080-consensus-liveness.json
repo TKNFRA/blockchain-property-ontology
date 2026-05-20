@@ -1,0 +1,73 @@
+{
+  "id": "BPO:0080",
+  "slug": "consensus-liveness",
+  "title": "Consensus Liveness (Eventual Inclusion & Finalization Under Assumptions)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["chain progress", "block-production liveness", "finalization liveness"],
+    "academic_terms": ["liveness under partial synchrony", "GST-bounded progress", "BFT liveness"],
+    "industry_terms": ["the chain keeps producing blocks", "transactions eventually finalize"],
+    "external_refs": {}
+  },
+  "classification": {
+    "modal_class": ["liveness", "guarantee-liveness-conditional"],
+    "deontic_role": ["guarantee", "assumption"],
+    "domains": ["consensus", "finality", "client"],
+    "abstraction_levels": ["protocol", "systemic"],
+    "verification_modalities": ["model-checking", "interactive-theorem-proving"],
+    "decidability": "computationally-conditional"
+  },
+  "descriptions": {
+    "semantic": "Under the protocol's stated fault and timing assumptions, the chain continues to make progress: validly submitted transactions are eventually included in a finalized block, and the finalized prefix keeps growing. Liveness is necessarily CONDITIONAL — by the FLP impossibility result no deterministic protocol guarantees both safety and liveness under full asynchrony with even one crash fault, so progress is predicated on partial synchrony (a global stabilization time after which message delay is bounded) and on the honest fraction exceeding the protocol threshold.",
+    "system_theoretic": "A progress property on the distributed transition system formed by validators + network: from any reachable configuration, a fair execution respecting the timing and honesty assumptions reaches a configuration with a longer finalized prefix. The assumptions are part of the property's statement, not optional caveats.",
+    "security": "Many higher-layer guarantees (BPO:0002 eventual-withdrawal, BPO:0082 escape hatch, bridge settlement, governance execution) DEPEND ON this. Its failure — a liveness halt from a network partition, a >threshold adversary, or a client bug stalling production — freezes everything reduced to it, even when safety is intact.",
+    "execution_semantics": "Manifests as: leader/proposer rotation making progress, view-changes terminating, votes reaching quorum, and finalization gadgets advancing. Violations: stalled view-change, quorum unreachable (too many offline/Byzantine), a deterministic client bug that halts all honest nodes.",
+    "formal_verification": "A liveness property: requires fairness assumptions and is established by model checking with fairness (TLA+/TLC, Ivy) or by interactive proof of progress under partial synchrony — NOT by reachability tools. Many production consensus protocols carry mechanized TLA+/Ivy liveness arguments."
+  },
+  "formalization": {
+    "signature": "Validators V; honest fraction h; finalized prefix len ℓ(s); GST the global stabilization time; thresholds (e.g. >2/3 honest for BFT).",
+    "first_order_logic": "Conditional progress:  ( h ≥ threshold ∧ network partial-synchronous after GST ) → ∀ valid tx submitted . ◇ finalized(tx).\nNon-stalling:  ( assumptions ) → □◇ ( ℓ increases ).",
+    "temporal_logic": {
+      "ltl": "G( submitted(tx) ∧ valid(tx) → F finalized(tx) )   ∧   G F (ℓ' > ℓ)",
+      "fairness": "REQUIRED: weak fairness on message delivery after GST; honest validators take enabled steps; adversary cannot indefinitely delay beyond the synchrony bound. Without these, FLP makes the property false."
+    },
+    "hoare": [],
+    "state_machine": "Distributed protocol modeled as an asynchronous-rounds automaton with an adversary scheduler bounded by partial synchrony; the property is a Büchi acceptance that the finalized prefix grows infinitely often on all fair, assumption-respecting runs.",
+    "type_theoretic": "Progress (productivity) of a non-terminating reactive process under a fairness environment; a coinductive guarantee that each open round eventually finalizes.",
+    "hyperproperty": "n/a (single-trace liveness under fairness)."
+  },
+  "relationships": [
+    { "type": "composesWith", "target": "BPO:0081", "note": "Liveness of block production composes with censorship-resistance to yield actual inclusion of a specific user's tx." },
+    { "type": "mitigates", "target": "ATK:liveness-halt" },
+    { "type": "mitigates", "target": "ATK:partition-stall" }
+  ],
+  "attack_surface": [
+    { "class": "threshold-violation", "pattern": "adversary/offline fraction exceeds the protocol's liveness threshold; quorum unreachable", "incident_refs": [], "notes": "Inherent to the fault model; mitigated by validator-set health and incentives." },
+    { "class": "view-change-stall", "pattern": "leader rotation / view-change fails to terminate", "incident_refs": [], "notes": "Verify view-change termination under partial synchrony." },
+    { "class": "client-bug-halt", "pattern": "a deterministic bug stalls all honest nodes simultaneously (monoculture risk)", "incident_refs": ["UNVERIFIED: multi-client diversity rationale"], "notes": "Client diversity reduces correlated halt risk." }
+  ],
+  "observability": {
+    "events": ["block/finalization events"],
+    "metrics": ["finalization latency", "time since last finalized block", "participating-stake fraction"],
+    "invariant_checkpoints": ["finalized prefix monotonically grows", "quorum reachable"],
+    "runtime_assertions": ["off-chain monitors alert on finalization stall"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Liveness model checking with fairness", "tools": ["TLA+/TLC", "Ivy", "NuSMV", "Spin"], "strength": "bounded-proof", "notes": "Model validators + adversary + partial synchrony; check the LTL progress formula." },
+      { "approach": "Mechanized liveness proof", "tools": ["Ivy", "Coq", "Isabelle/HOL"], "strength": "proof", "notes": "Prove progress under GST + threshold for unbounded validator sets via inductive/ranking arguments." }
+    ],
+    "testability": ["progress not unit-testable; test enabling conditions: view-change terminates, quorum logic correct; chaos/partition testing for empirical liveness"]
+  },
+  "enforcement": {
+    "runtime": ["leader rotation / timeouts", "fork-choice progress rules", "incentives for participation"],
+    "static": ["model-checked view-change termination"],
+    "design_patterns": ["partial-synchrony design with bounded timeouts", "client diversity to avoid correlated halts"]
+  },
+  "assumptions": [
+    { "kind": "synchrony", "statement": "Network is partially synchronous (bounded delay after GST).", "discharged_by": null },
+    { "kind": "honest-majority", "statement": "Honest/online fraction meets the protocol threshold (e.g. >2/3 for BFT).", "discharged_by": null }
+  ],
+  "provenance": { "authors": ["BPO seed"], "created": "2026-05-20", "confidence": "draft", "sources": ["Fischer-Lynch-Paterson (FLP) impossibility", "Dwork-Lynch-Stockmeyer partial synchrony", "Castro-Liskov PBFT"], "notes": "Discharge target for the consensus-liveness assumptions of BPO:0002 / BPO:0050 / BPO:0082. Its own assumptions are accepted (null discharge) — they bottom out at protocol fault/timing models." }
+}
