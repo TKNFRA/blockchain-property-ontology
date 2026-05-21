@@ -10,7 +10,10 @@
     "industry_terms": ["users can always exit", "no locked funds", "forced inclusion / L2 escape hatch"],
     "external_refs": {
       "swc": ["SWC-113 DoS with failed call", "SWC-128 DoS with block gas limit"],
-      "dasp": ["DASP-5 Denial of Service"]
+      "dasp": ["DASP-5 Denial of Service"],
+      "iso20022": [
+        { "id": "ISO20022:setr.054", "relation": "relates-to", "note": "Redemption (the RedemptionMultipleOrder business intent) is the investment-fund-layer realization of WITHDRAW; eventual-withdrawal is the liveness side. `relates-to` rather than `constrains` — the property is about WITHDRAW broadly, not specifically about ISO 20022 redemption semantics." }
+      ]
     }
   },
   "classification": {

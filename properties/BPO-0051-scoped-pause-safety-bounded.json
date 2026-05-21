@@ -14,6 +14,9 @@
       "dascp": [
         { "id": "C30-S", "relation": "partially-supports", "note": "Account-scope instance: BPO:0051 STRENGTHENS C30-S by requiring the per-account pause to either auto-expire or always permit a forced-recovery path; C30-S's white-paper text mandates the pause capability but not its boundedness." },
         { "id": "C31-S", "relation": "partially-supports", "note": "Token-scope instance: BPO:0051 STRENGTHENS C31-S in the same way at per-token scope; the freeze-forever-by-scope failure mode is excluded by construction here but not by C31-S as written." }
+      ],
+      "iso20022": [
+        { "id": "ISO20022:semt.013", "relation": "constrains", "note": "Per-token (and per-account) pause directly constrains intra-position movements within the paused scope; semt.013 (IntraPositionMovementInstruction) is the ISO 20022 realization of a scoped hold on positions, and the property's bounded-with-exit obligation constrains how such holds may be applied." }
       ]
     }
   },

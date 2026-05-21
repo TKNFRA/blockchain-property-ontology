@@ -11,6 +11,9 @@
     "external_refs": {
       "dascp": [
         { "id": "C51-N", "relation": "partially-supports", "note": "Formalizes the supply-conservation core of C51-N (sum of cross-ledger representations equals issued supply); the broader 'shared data' dimension of C51-N (reconciliation of non-supply data such as identity, transaction history) is intentionally not covered here — that is a separate cross-ledger data-consistency obligation that would need its own property." }
+      ],
+      "iso20022": [
+        { "id": "ISO20022:cmp/FinancialInstrument", "relation": "relates-to", "note": "Cross-ledger inventory consistency is per-instrument; the conserved aggregate Σ_L supply_L(a) is over all ledger-side representations of a single FinancialInstrument." }
       ]
     }
   },

@@ -11,6 +11,11 @@
     "external_refs": {
       "dascp": [
         { "id": "C47-N", "relation": "partially-supports", "note": "Formalizes single-ledger encumbrance preventing double-spend until settlement. The cross-network encumbrance coordination aspect of C47-N (HTLC-style multi-ledger atomic swaps where the lock spans chains) is broader and belongs to a future cross-ledger property; BPO:0102 covers the cross-ledger inventory side but not the encumbrance-lock half." }
+      ],
+      "iso20022": [
+        { "id": "ISO20022:semt.013", "relation": "constrains", "note": "Encumbrance is realized as an intra-position movement that blocks the encumbered quantity without changing beneficial ownership; the property constrains the correctness of semt.013 instances that effect such holds and their guarded releases." },
+        { "id": "ISO20022:cmp/SecuritiesAccount", "relation": "relates-to", "note": "Encumbrance acts on a specific account holding; the (free, encumbered) accounting partition is a refinement of the position-keeping inside a SecuritiesAccount." },
+        { "id": "ISO20022:cmp/FinancialInstrument", "relation": "relates-to", "note": "Encumbrance is per-instrument; the obligation binds a quantity of a specific FinancialInstrument." }
       ]
     }
   },

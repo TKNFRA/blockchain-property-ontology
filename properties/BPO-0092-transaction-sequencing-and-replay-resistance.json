@@ -12,6 +12,9 @@
       "cwe": ["CWE-294 Authentication Bypass by Capture-replay"],
       "dascp": [
         { "id": "C50-N", "relation": "partially-supports", "note": "Formalizes the replay-resistance and per-issuer monotone-ordering content of C50-N; the consensus-level GLOBAL ordering aspect of C50-N (cross-validator ordering of unrelated transactions) belongs to BPO:0080 and is intentionally not covered here." }
+      ],
+      "iso20022": [
+        { "id": "ISO20022:elem/SettlementTransactionIdentification", "relation": "relates-to", "note": "The property's per-issuer monotone-nonce serves the same uniqueness role at the contract layer that SettlementTransactionIdentification serves in ISO 20022 — a single-use identifier preventing replay and acting as the join key for subsequent status / confirmation messages." }
       ]
     }
   },

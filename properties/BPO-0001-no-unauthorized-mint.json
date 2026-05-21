@@ -17,6 +17,9 @@
         { "id": "C19-S", "relation": "partially-supports", "note": "Establishes that the mint selector is gated by MINTER_ROLE; covers the mint slice of fine-grained smart-contract entitlements but not the broader function/data surface of C19-S." },
         { "id": "C24-S", "relation": "partially-supports", "note": "Provides the formal specification of correct mint function behavior; one facet of conforming to a common function/behavior set." },
         { "id": "C28-S", "relation": "partially-supports", "note": "Relies on a defined MINTER role; covers role-gated mint but not the broader role catalogue mandated by C28-S." }
+      ],
+      "iso20022": [
+        { "id": "ISO20022:setr.044", "relation": "constrains", "note": "Mint / subscription corresponds to the SubscriptionMultipleOrder business intent at the investment-fund layer; the property's MINTER-gated supply-monotonicity guard constrains the issuance side." }
       ]
     }
   },

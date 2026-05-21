@@ -15,6 +15,9 @@
         { "id": "C29-S", "relation": "partially-supports", "note": "Establishes the BOUNDED form of emergency stop — the safety halt plus an auto-expiry or always-available exit; STRENGTHENS C29-S beyond the white-paper text, which mandates the kill-switch capability but not its boundedness." },
         { "id": "C30-S", "relation": "partially-supports", "note": "System-level pause property; C30-S is the per-account refinement and requires its own scope." },
         { "id": "C31-S", "relation": "partially-supports", "note": "System-level pause property; C31-S is the per-token refinement and requires its own scope." }
+      ],
+      "iso20022": [
+        { "id": "ISO20022:sese.023", "relation": "constrains", "note": "While paused, settlement transaction instructions are halted; the property constrains the processing of sese.023 instances within the paused mode and mandates either bounded auto-unpause or an always-available recovery edge so the pause cannot indefinitely freeze entitled exits." }
       ]
     }
   },

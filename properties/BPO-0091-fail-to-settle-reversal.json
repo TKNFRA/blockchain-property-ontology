@@ -11,6 +11,9 @@
     "external_refs": {
       "dascp": [
         { "id": "C49-N", "relation": "partially-supports", "note": "Formalizes the behavioural reversibility core of C49-N (a correct compensating action exists and completes in bounded time); the organizational-procedure aspects of C49-N — runbooks, escalation, manual intervention — are operational and stay out of BPO scope." }
+      ],
+      "iso20022": [
+        { "id": "ISO20022:sese.024", "relation": "relates-to", "note": "Status advice reports the failure state that triggers compensation; the property relates to the status mechanism but does not directly constrain sese.024 — it constrains the system's response (a bounded-time compensating action) after failure has surfaced through this message." }
       ]
     }
   },

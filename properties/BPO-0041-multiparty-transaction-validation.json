@@ -13,6 +13,9 @@
       "dasp": ["DASP-2 Access Control"],
       "dascp": [
         { "id": "C16-S", "relation": "partially-supports", "note": "Formalizes the behavioural k-of-n approval core of C16-S; the 'periodic updates to address emerging security challenges' clause is operational and stays out of BPO scope." }
+      ],
+      "iso20022": [
+        { "id": "ISO20022:sese.023", "relation": "constrains", "note": "When a settlement transaction instruction requires multi-party validation, the property's k-of-n approval gate constrains whether the instruction can be admitted at the contract layer." }
       ]
     }
   },

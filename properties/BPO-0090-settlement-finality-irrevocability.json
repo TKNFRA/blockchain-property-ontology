@@ -11,6 +11,11 @@
     "external_refs": {
       "dascp": [
         { "id": "C48-N", "relation": "partially-supports", "note": "Formalizes the finality-as-invariant core of C48-N (verifiable that a finalized leg stays final); the cross-network synchronized-timestamp aspect of C48-N is addressed by BPO:0102, not by this property." }
+      ],
+      "iso20022": [
+        { "id": "ISO20022:sese.023", "relation": "constrains", "note": "The settlement transaction instruction must reach a final state; the property constrains the lifecycle of a sese.023 instance from pending to final and mandates absorbing semantics." },
+        { "id": "ISO20022:sese.024", "relation": "constrains", "note": "Status advice must accurately reflect finality once reached and cannot regress; the property's persistence invariant constrains the legal status transitions surfaced via sese.024." },
+        { "id": "ISO20022:sese.025", "relation": "constrains", "note": "Settlement confirmation corresponds to the FINAL state; the property guarantees the confirmation reflects an irrevocable accountedOutcome." }
       ]
     }
   },

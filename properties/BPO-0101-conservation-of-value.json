@@ -14,6 +14,10 @@
         { "id": "C25-S", "relation": "partially-supports", "note": "Establishes the system-wide accounting invariant (V conserved by internal ops, updated correctly by sanctioned flows); does not fix the private/public accounting model C25-S requires." },
         { "id": "C26-S", "relation": "partially-supports", "note": "Provides the accounting invariant that distinguishes sanctioned flows from internal moves; does not establish the customer-vs-proprietary account delineation C26-S mandates." },
         { "id": "C51-N", "relation": "partially-supports", "note": "Within-ledger conservation invariant; cross-ledger inventory consistency is the generalization not yet covered (tracked as a gap)." }
+      ],
+      "iso20022": [
+        { "id": "ISO20022:sese.023", "relation": "constrains", "note": "Settlement transaction instructions move value within the system; the property's conservation invariant V' = V + d - w + m - b constrains every sese.023 leg's accounting effect to one of the sanctioned-flow terms (no value creation ex nihilo)." },
+        { "id": "ISO20022:elem/SettlementAmount", "relation": "relates-to", "note": "The SettlementAmount element carries the value being settled; the property's per-asset value measure V projects onto this element per leg." }
       ]
     }
   },
