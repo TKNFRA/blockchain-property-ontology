@@ -8,7 +8,12 @@
     "aliases": ["chain progress", "block-production liveness", "finalization liveness"],
     "academic_terms": ["liveness under partial synchrony", "GST-bounded progress", "BFT liveness"],
     "industry_terms": ["the chain keeps producing blocks", "transactions eventually finalize"],
-    "external_refs": {}
+    "external_refs": {
+      "dascp": [
+        { "id": "C36-R", "relation": "partially-supports", "note": "Formal liveness property under partial synchrony; redundancy and concurrency are operational mitigations toward this goal but do not themselves discharge the synchrony or honest-majority assumptions." },
+        { "id": "C38-R", "relation": "partially-supports", "note": "Formal liveness property; failure prevention/detection/recovery are operational mitigations toward sustained progress but do not themselves discharge the protocol-level liveness obligation." }
+      ]
+    }
   },
   "classification": {
     "modal_class": ["liveness", "guarantee-liveness-conditional"],

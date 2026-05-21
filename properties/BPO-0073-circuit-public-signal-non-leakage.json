@@ -8,7 +8,12 @@
     "aliases": ["no witness leakage through public signals", "output non-leakage", "circuit confidentiality"],
     "academic_terms": ["non-interference (declassification-bounded)", "information-flow security of arithmetic circuits"],
     "industry_terms": ["public inputs reveal nothing secret", "minimal public surface"],
-    "external_refs": {}
+    "external_refs": {
+      "dascp": [
+        { "id": "C40-R", "relation": "partially-supports", "note": "Circuit-level non-leakage establishes that public signals carry no secret-witness information beyond the declassified relation; does not establish network- or storage-level data segregation." },
+        { "id": "C41-R", "relation": "partially-supports", "note": "Information-flow typing of circuits provides one form of structural anonymization at the proof boundary; does not cover identifier-level pseudonymization across the network." }
+      ]
+    }
   },
   "classification": {
     "modal_class": ["hypersafety", "non-interference"],

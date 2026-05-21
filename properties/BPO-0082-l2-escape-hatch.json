@@ -8,7 +8,11 @@
     "aliases": ["forced withdrawal", "self-sequencing exit", "L1 escape", "rollup exit guarantee"],
     "academic_terms": ["trust-minimized exit", "L1-only liveness for withdrawal"],
     "industry_terms": ["escape hatch", "force-withdraw via L1", "sequencer-bypass exit"],
-    "external_refs": {}
+    "external_refs": {
+      "dascp": [
+        { "id": "C21-S", "relation": "partially-supports", "note": "L1-only forced-withdrawal exit is one specific cross-network protocol (L2 → L1); does not cover the broader cross-network interoperability surface that C21-S addresses." }
+      ]
+    }
   },
   "classification": {
     "modal_class": ["liveness", "guarantee-liveness-conditional"],

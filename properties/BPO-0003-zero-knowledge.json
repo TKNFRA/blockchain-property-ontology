@@ -9,7 +9,11 @@
     "academic_terms": ["computational zero-knowledge (CZK)", "honest-verifier ZK (HVZK)", "simulation paradigm", "indistinguishability of real and ideal views"],
     "industry_terms": ["privacy of the prover's secret inputs", "the proof leaks no witness"],
     "external_refs": {
-      "other": ["Goldwasser-Micali-Rackoff (1985) interactive proofs", "Fiat-Shamir heuristic (NIZK)"]
+      "other": ["Goldwasser-Micali-Rackoff (1985) interactive proofs", "Fiat-Shamir heuristic (NIZK)"],
+      "dascp": [
+        { "id": "C40-R", "relation": "partially-supports", "note": "Cryptographic-level confidentiality via simulator-based witness privacy; does not establish network- or storage-level segregation of confidential data." },
+        { "id": "C41-R", "relation": "partially-supports", "note": "ZK provides one form of cryptographic anonymization at the proof layer; does not cover identifier-level pseudonymization across the network." }
+      ]
     }
   },
   "classification": {

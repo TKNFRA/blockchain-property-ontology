@@ -8,7 +8,15 @@
     "aliases": ["circuit breaker safety", "bounded pause", "guarded halt"],
     "academic_terms": ["controlled shutdown safety", "fail-safe state reachability"],
     "industry_terms": ["pausable", "guardian pause", "kill-switch with escape hatch"],
-    "external_refs": { "cwe": ["CWE-693 Protection Mechanism Failure"], "dasp": ["DASP-5 Denial of Service (when unbounded)"] }
+    "external_refs": {
+      "cwe": ["CWE-693 Protection Mechanism Failure"],
+      "dasp": ["DASP-5 Denial of Service (when unbounded)"],
+      "dascp": [
+        { "id": "C29-S", "relation": "partially-supports", "note": "Establishes the BOUNDED form of emergency stop — the safety halt plus an auto-expiry or always-available exit; STRENGTHENS C29-S beyond the white-paper text, which mandates the kill-switch capability but not its boundedness." },
+        { "id": "C30-S", "relation": "partially-supports", "note": "System-level pause property; C30-S is the per-account refinement and requires its own scope." },
+        { "id": "C31-S", "relation": "partially-supports", "note": "System-level pause property; C31-S is the per-token refinement and requires its own scope." }
+      ]
+    }
   },
   "classification": {
     "modal_class": ["safety", "guarantee-liveness-conditional"],

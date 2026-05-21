@@ -8,7 +8,14 @@
     "aliases": ["checks-effects-interactions", "no reentrant exploitation", "call-boundary atomicity"],
     "academic_terms": ["effect atomicity", "serializability of nested invocations", "non-interference of re-entrant frames"],
     "industry_terms": ["reentrancy guard", "read-only reentrancy safety", "cross-function reentrancy safety"],
-    "external_refs": { "swc": ["SWC-107 Reentrancy"], "cwe": ["CWE-841 Improper Enforcement of Behavioral Workflow"], "dasp": ["DASP-1 Reentrancy"] }
+    "external_refs": {
+      "swc": ["SWC-107 Reentrancy"],
+      "cwe": ["CWE-841 Improper Enforcement of Behavioral Workflow"],
+      "dasp": ["DASP-1 Reentrancy"],
+      "dascp": [
+        { "id": "C47-N", "relation": "partially-supports", "note": "Prevents the reentrant-double-spend mode at the contract-execution layer; does not establish the broader settlement-level encumbrance (a no-double-spend-until-settled property is tracked as a gap)." }
+      ]
+    }
   },
   "classification": {
     "modal_class": ["safety", "hypersafety"],

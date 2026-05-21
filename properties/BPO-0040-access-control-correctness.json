@@ -8,7 +8,17 @@
     "aliases": ["authorization soundness", "role separation", "privilege monotonicity", "revocation correctness", "admin boundedness", "capability isolation"],
     "academic_terms": ["reference-monitor completeness", "principle of least authority", "non-bypassability"],
     "industry_terms": ["onlyRole / onlyOwner correctness", "no privilege escalation", "RBAC integrity"],
-    "external_refs": { "swc": ["SWC-105 Unprotected critical function", "SWC-115 tx.origin authorization", "SWC-100 Function default visibility"], "cwe": ["CWE-284 Improper Access Control", "CWE-269 Improper Privilege Management", "CWE-862 Missing Authorization"], "dasp": ["DASP-2 Access Control"] }
+    "external_refs": {
+      "swc": ["SWC-105 Unprotected critical function", "SWC-115 tx.origin authorization", "SWC-100 Function default visibility"],
+      "cwe": ["CWE-284 Improper Access Control", "CWE-269 Improper Privilege Management", "CWE-862 Missing Authorization"],
+      "dasp": ["DASP-2 Access Control"],
+      "dascp": [
+        { "id": "C19-S", "relation": "partially-supports", "note": "Provides the formal correctness framework for any access-control scheme; does not mandate the specific fine-grained role-based mechanism C19-S prescribes." },
+        { "id": "C28-S", "relation": "partially-supports", "note": "Establishes that the role-admin DAG is sound and authority is monotone under delegation; does not fix the specific role catalogue C28-S mandates." },
+        { "id": "C15-S", "relation": "partially-supports", "note": "Establishes correctness of the access-enforcement layer; does not bind it to the KYC/sanctions criteria C15-S requires." },
+        { "id": "C45-R", "relation": "partially-supports", "note": "Establishes correctness of privileged-role assignment and revocation that any data-integrity-correction capability depends on; does not establish the correction mechanism itself." }
+      ]
+    }
   },
   "classification": {
     "modal_class": ["safety"],

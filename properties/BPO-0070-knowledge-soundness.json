@@ -8,7 +8,13 @@
     "aliases": ["proof-of-knowledge", "no false-statement acceptance", "circuit fully-constrained"],
     "academic_terms": ["knowledge soundness", "witness-extended emulation", "special soundness", "proof of knowledge (PoK)"],
     "industry_terms": ["no under-constrained signals", "soundness bug", "constraint completeness"],
-    "external_refs": { "other": ["Bellare-Goldreich PoK definition", "Fiat-Shamir / Sigma-protocol special soundness"] }
+    "external_refs": {
+      "other": ["Bellare-Goldreich PoK definition", "Fiat-Shamir / Sigma-protocol special soundness"],
+      "dascp": [
+        { "id": "C48-N", "relation": "supports", "note": "Knowledge-soundness is a precondition for any settlement proof to be meaningful: a fraud- or validity-proof scheme used to evidence settlement legs must itself be knowledge-sound." },
+        { "id": "C32-R", "relation": "supports", "note": "Auditing ZK-mediated actions presupposes the proofs being audited are knowledge-sound; the audit trail otherwise records assertions of unknown validity." }
+      ]
+    }
   },
   "classification": {
     "modal_class": ["safety"],

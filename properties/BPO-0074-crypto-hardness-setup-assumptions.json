@@ -8,7 +8,11 @@
     "aliases": ["computational hardness assumption", "CRS soundness", "no toxic waste", "random-oracle assumption"],
     "academic_terms": ["DLOG / DDH / q-SDH / knowledge-of-exponent (AGM)", "random oracle model (ROM)", "common reference string (CRS)"],
     "industry_terms": ["powers-of-tau ceremony", "trusted setup honesty", "transparent setup"],
-    "external_refs": {}
+    "external_refs": {
+      "dascp": [
+        { "id": "C20-S", "relation": "supports", "note": "Provides the hardness-assumption framework against which a quantum-resistant signature algorithm's security would be reduced; does not itself specify or implement the algorithm." }
+      ]
+    }
   },
   "classification": {
     "modal_class": ["safety"],

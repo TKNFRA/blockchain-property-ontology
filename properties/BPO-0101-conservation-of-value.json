@@ -8,7 +8,14 @@
     "aliases": ["value conservation", "no value creation ex nihilo", "accounting consistency", "global balance invariant"],
     "academic_terms": ["resource conservation", "frame-preserving accounting", "invariant of a closed economic system"],
     "industry_terms": ["assets equal liabilities", "no phantom value", "reserve consistency"],
-    "external_refs": { "dasp": ["DASP-3 Arithmetic (when caused by rounding)"] }
+    "external_refs": {
+      "dasp": ["DASP-3 Arithmetic (when caused by rounding)"],
+      "dascp": [
+        { "id": "C25-S", "relation": "partially-supports", "note": "Establishes the system-wide accounting invariant (V conserved by internal ops, updated correctly by sanctioned flows); does not fix the private/public accounting model C25-S requires." },
+        { "id": "C26-S", "relation": "partially-supports", "note": "Provides the accounting invariant that distinguishes sanctioned flows from internal moves; does not establish the customer-vs-proprietary account delineation C26-S mandates." },
+        { "id": "C51-N", "relation": "partially-supports", "note": "Within-ledger conservation invariant; cross-ledger inventory consistency is the generalization not yet covered (tracked as a gap)." }
+      ]
+    }
   },
   "classification": {
     "modal_class": ["safety"],

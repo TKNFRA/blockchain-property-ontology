@@ -8,7 +8,12 @@
     "aliases": ["transparency", "trustless verifiability", "public verifiability"],
     "academic_terms": ["public verifiability", "accountability", "transparency property"],
     "industry_terms": ["everything on-chain is auditable", "verifiable state", "proof-of-reserves verifiability"],
-    "external_refs": {}
+    "external_refs": {
+      "dascp": [
+        { "id": "C32-R", "relation": "partially-supports", "note": "Establishes the public-verifiability content of an audit trail (every consequential action carries a publicly checkable record); does not bind the trail to synchronized timestamps or external-activity inclusion that C32-R additionally requires." },
+        { "id": "C46-N", "relation": "supports", "note": "Auditability is a precondition for meaningful data lineage: lineage records are only useful if independently checkable, which is what public-auditability provides." }
+      ]
+    }
   },
   "classification": {
     "modal_class": ["safety"],
