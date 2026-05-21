@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bpo.spec/mappings/iso20022.framework.schema.json",
+  "title": "ISO 20022 Reference Bindings (BPO subset)",
+  "description": "Machine-readable subset of ISO 20022 message types, business components, and data elements that BPO properties or operations reference. ISO 20022 identifiers and structure are published free-of-use by the Registration Authority (SWIFT) via iso20022.org; this file mirrors only the subset BPO needs and paraphrases descriptions in our own words. This JSON Schema fixes the file SHAPE; internal integrity (id uniqueness across messages ∪ components ∪ elements) is enforced by schema/validate_refs.py.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["framework", "title", "version", "publisher", "registration_authority", "license_note", "messages", "components", "elements"],
+  "properties": {
+    "framework":               { "const": "ISO20022" },
+    "title":                   { "type": "string" },
+    "version":                 { "type": "string" },
+    "publisher":               { "type": "string" },
+    "registration_authority":  { "type": "string" },
+    "source":                  { "type": "string" },
+    "license_note":            { "type": "string" },
+    "messages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "description"],
+        "properties": {
+          "id":          { "type": "string", "pattern": "^ISO20022:[a-z]+\\.[0-9]{3}$" },
+          "name":        { "type": "string" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "description"],
+        "properties": {
+          "id":          { "type": "string", "pattern": "^ISO20022:cmp/[A-Za-z][A-Za-z0-9]*$" },
+          "name":        { "type": "string" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "elements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "description"],
+        "properties": {
+          "id":               { "type": "string", "pattern": "^ISO20022:elem/[A-Za-z][A-Za-z0-9]*$" },
+          "name":             { "type": "string" },
+          "description":      { "type": "string" },
+          "parent_component": { "type": "string", "pattern": "^ISO20022:cmp/[A-Za-z][A-Za-z0-9]*$" }
+        }
+      }
+    }
+  }
+}
