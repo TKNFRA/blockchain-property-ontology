@@ -1,0 +1,355 @@
+{
+  "framework": "OPERATIONS",
+  "title": "BPO Abstract Operations Catalogue",
+  "version": "0.1.0",
+  "license_note": "Operations are abstract kinds of state change that BPO properties quantify over. Function signatures listed under each operation's `examples` are platform-specific illustrations and are explicitly non-normative — the ontology does NOT commit to maintaining function-level coverage. To prevent drift toward a function catalogue, every entry in `operations[]` must be grounded in at least one current BPO property's formalization (see `inclusion_bar`); candidates without grounding are held in `candidates_pending_grounding[]` and not part of the catalogue proper.",
+  "inclusion_bar": "A candidate operation X qualifies for inclusion in operations[] iff (a) X is a distinct abstract kind of state change — not a path through Op-space, not a role/scope qualifier (subset-of-Op categorisations such as `privileged`, `valueMoving`, `Consequential`, `recovery`, `Internal` do NOT qualify), not a function-signature shorthand, and not an implementation detail; AND (b) at least one BPO property's formalization treats X differently from its neighbours — different guard, different effect on the state vocabulary, or different invariant clause. If two candidates always share guards, effects, and invariants across the entire corpus, they collapse into one.",
+
+  "operations": [
+    {
+      "id": "OP:TRANSFER",
+      "name": "Transfer",
+      "definition": "Move custody of a quantity of an asset from one principal to another while preserving total supply.",
+      "state_change": "bal(s', A) decreases by q; bal(s', B) increases by q; totalSupply(s') = totalSupply(s); no system-boundary crossing.",
+      "examples": [
+        "ERC-20: transfer(address to, uint256 amount)",
+        "ERC-20: transferFrom(address from, address to, uint256 amount)",
+        "ERC-721: safeTransferFrom(address from, address to, uint256 tokenId)",
+        "ERC-1155: safeBatchTransferFrom(address from, address to, uint256[] ids, uint256[] amounts, bytes data)"
+      ],
+      "iso20022_intents": ["ISO20022:sese.023", "ISO20022:sese.024", "ISO20022:sese.025"],
+      "governs_properties": [
+        { "property": "BPO:0020", "note": "Atomicity / reentrancy-safety holds at the external-call boundaries that TRANSFER triggers (e.g. ERC-777/1155 hook callbacks); not transfer-specific, but applies to TRANSFER's execution surface." },
+        { "property": "BPO:0101", "note": "TRANSFER falls under the `Internal ⊆ Op` subset (supply-preserving moves); the conservation clause `∀ o ∈ Internal . V(s') = V(s)` constrains it. The supply-monotonicity guard of BPO:0001 is universal over non-mint ops and lives there, not duplicated here." }
+      ],
+      "notes": "Function-level examples illustrate platform realizations; the catalogue does not commit to maintaining function-level coverage."
+    },
+    {
+      "id": "OP:MINT",
+      "name": "Mint",
+      "definition": "Create new supply of an asset, increasing totalSupply by an authorized amount.",
+      "state_change": "totalSupply(s') = totalSupply(s) + q; bal(s', A) increases by q for the credited principal A; requires the mint capability (e.g. hasRole_MINTER).",
+      "examples": [
+        "ERC-20 OpenZeppelin: _mint(address to, uint256 amount)",
+        "ERC-1155: _mint(address to, uint256 id, uint256 amount, bytes data)"
+      ],
+      "iso20022_intents": ["ISO20022:setr.044"],
+      "governs_properties": [
+        "BPO:0001",
+        { "property": "BPO:0101", "note": "MINT is named as the sanctioned-flow `m` in BPO:0101's accounting equation V' = V + d − w + m − b; this is the value-conservation slice, distinct from the supply-monotonicity guard of BPO:0001." }
+      ],
+      "notes": "BPO:0001 is the primary governor (no-unauthorized-mint), formalized as `isMint(tx.selector) ∧ hasRole_MINTER` gating any positive supply change."
+    },
+    {
+      "id": "OP:BURN",
+      "name": "Burn",
+      "definition": "Destroy supply of an asset, decreasing totalSupply by an authorized amount.",
+      "state_change": "totalSupply(s') = totalSupply(s) − q; bal(s', A) decreases by q for the debited principal A; requires the burn capability.",
+      "examples": [
+        "ERC-20 OpenZeppelin: _burn(address from, uint256 amount)",
+        "ERC-1155: _burn(address from, uint256 id, uint256 amount)"
+      ],
+      "iso20022_intents": ["ISO20022:setr.054"],
+      "governs_properties": [
+        { "property": "BPO:0101", "note": "BURN is the sanctioned-flow `b` in BPO:0101's accounting equation V' = V + d − w + m − b. No dedicated burn-property exists in the current corpus; the supply-monotonicity-down side is governed only by this conservation clause." }
+      ],
+      "notes": "Single partial governor only — a candidate for a future dedicated property (`no-unauthorized-burn`) symmetric with BPO:0001 if burn semantics start to demand a guard distinct from the conservation invariant."
+    },
+    {
+      "id": "OP:DEPOSIT",
+      "name": "Deposit",
+      "definition": "Bring value into the modelled system from outside it — an external inflow that increases the system's value measure.",
+      "state_change": "V(s') = V(s) + d for the deposited amount d; bal(s', A) increases for the receiving principal A; crosses the system boundary inward.",
+      "examples": [
+        "Bridge inbound: lock-on-source / mint-on-destination paired sequence",
+        "Vault subscription: vault.deposit(uint256 assets, address receiver)"
+      ],
+      "iso20022_intents": ["ISO20022:setr.044"],
+      "governs_properties": [
+        { "property": "BPO:0101", "note": "DEPOSIT is named as the sanctioned-flow `d` in BPO:0101's accounting equation V' = V + d − w + m − b. No dedicated deposit-property exists in the current corpus." }
+      ],
+      "notes": "Single partial governor only — a candidate for a future deposit-correctness property if cross-boundary inflow semantics demand more than conservation alone."
+    },
+    {
+      "id": "OP:WITHDRAW",
+      "name": "Withdraw",
+      "definition": "Send value from the modelled system to outside it — an external outflow that decreases the system's value measure.",
+      "state_change": "V(s') = V(s) − w for the withdrawn amount w; bal(s', A) decreases for the debited principal A; crosses the system boundary outward.",
+      "examples": [
+        "L2 → L1 forced withdrawal: forceInclude / proveBalance / withdraw",
+        "Vault redemption: vault.withdraw(uint256 assets, address receiver, address owner)"
+      ],
+      "iso20022_intents": ["ISO20022:setr.054"],
+      "governs_properties": [
+        "BPO:0002",
+        { "property": "BPO:0050", "note": "Under pause, WITHDRAW is in the `valueMoving ⊆ Op` subset and is gated by the paused mode; the recovery-edge / forced-exit clause requires WITHDRAW remain reachable for entitled exits." },
+        { "property": "BPO:0082", "note": "L1-rooted refinement of WITHDRAW for the L2 setting — the forceInclude → proveBalance → withdraw sequence reparents WITHDRAW's liveness obligation from the sequencer to L1." },
+        { "property": "BPO:0101", "note": "WITHDRAW is the sanctioned-flow `w` in BPO:0101's accounting equation V' = V + d − w + m − b." }
+      ],
+      "notes": "BPO:0002 (eventual-withdrawal) is the primary governor — WITHDRAW is its principal subject."
+    },
+
+    {
+      "id": "OP:GRANT",
+      "name": "Grant",
+      "definition": "Assign an authority (role / capability) to a principal.",
+      "state_change": "hasAuth(s', p, a) := TRUE; gated by authorizedAdmin(s, sender, a).",
+      "examples": [
+        "OpenZeppelin AccessControl: grantRole(bytes32 role, address account)"
+      ],
+      "governs_properties": [
+        "BPO:0040"
+      ],
+      "notes": "BPO:0040 names `grant` directly in its FOL and Hoare clauses as the sanctioned mutator of the authority configuration."
+    },
+    {
+      "id": "OP:REVOKE",
+      "name": "Revoke",
+      "definition": "Remove an authority from a principal with immediate effect.",
+      "state_change": "hasAuth(s', p, a) := FALSE; the revoked principal cannot exercise a beyond s'.",
+      "examples": [
+        "OpenZeppelin AccessControl: revokeRole(bytes32 role, address account)",
+        "OpenZeppelin AccessControl: renounceRole(bytes32 role, address account)"
+      ],
+      "governs_properties": [
+        "BPO:0040"
+      ],
+      "notes": "BPO:0040's `revocation effectiveness` clause names REVOKE explicitly: `s --[revoke(p,a)]--> s' ⇒ ¬hasAuth(s',p,a)`."
+    },
+
+    {
+      "id": "OP:PAUSE",
+      "name": "Pause",
+      "definition": "Enter halt mode for a scope (system, account, or token); value-moving operations within the scope are disabled.",
+      "state_change": "mode(σ, s') := paused; pausedAt(σ, s') := block.timestamp; value-moving transitions within σ are removed from the LTS until the scope is unpaused or auto-expires.",
+      "examples": [
+        "OpenZeppelin Pausable: _pause()",
+        "Per-token compliance freeze (ERC-3643 style)"
+      ],
+      "governs_properties": [
+        "BPO:0050",
+        "BPO:0051"
+      ],
+      "notes": "Both BPO:0050 (system-scope) and BPO:0051 (account- and token-scope) name PAUSE as principal subject and strengthen the bare capability with the bounded-with-exit obligation."
+    },
+    {
+      "id": "OP:UNPAUSE",
+      "name": "Unpause",
+      "definition": "Exit halt mode for a scope, restoring value-moving operations within the scope.",
+      "state_change": "mode(σ, s') := active; the σ-paused transition restrictions are lifted.",
+      "examples": [
+        "OpenZeppelin Pausable: _unpause()",
+        "Auto-unpause when block.timestamp ≥ pausedAt + maxPause (timelock variant)"
+      ],
+      "governs_properties": [
+        "BPO:0050",
+        "BPO:0051"
+      ],
+      "notes": "Same governors as PAUSE — the auto-unpause variant fires on clock alone and is part of the formal `bounded sojourn` clause of both BPO:0050 and BPO:0051."
+    },
+
+    {
+      "id": "OP:ENCUMBER",
+      "name": "Encumber",
+      "definition": "Place a hold on a quantity within a holding against an obligation, deducting from `free` and crediting `encumbered[o]`.",
+      "state_change": "free(h, a, s') = free(h, a, s) − q; encumbered(h, a, o, s') = encumbered(h, a, o, s) + q; the move is sum-preserving on total(h, a).",
+      "examples": [
+        "Vault collateral lock: setEncumbered(holder, asset, obligationId, amount)",
+        "ERC-7589 (encumbrance proposal): encumber(address holder, address asset, bytes32 obligationId, uint256 amount)"
+      ],
+      "iso20022_intents": ["ISO20022:semt.013"],
+      "governs_properties": [
+        "BPO:0093"
+      ],
+      "notes": "BPO:0093 names `encumber` in its signature (`dispose, encumber, releaseOnSettle, releaseOnCancel ⊆ Op`) and in its Hoare encumber clause."
+    },
+    {
+      "id": "OP:RELEASE",
+      "name": "Release",
+      "definition": "Release an encumbrance per its obligation's final disposition — either settle to a counterparty or cancel back to the holder.",
+      "state_change": "encumbered(h, a, o, s') = encumbered(h, a, o, s) − q; either (settle) credits the counterparty by q, or (cancel) credits free(h, a) by q; guarded by obligationStatus(o, s) ∈ {settled, cancelled}.",
+      "examples": [
+        "releaseOnSettle(holder, asset, obligationId)",
+        "releaseOnCancel(holder, asset, obligationId)"
+      ],
+      "iso20022_intents": ["ISO20022:semt.013"],
+      "governs_properties": [
+        "BPO:0093",
+        { "property": "BPO:0091", "note": "Failed-attempt compensation must invoke RELEASE (in cancel disposition) on every encumbrance the failed attempt placed, so the no-stranded-encumbrance composesWith clause between BPO:0091 and BPO:0093 lands here." }
+      ],
+      "notes": "BPO:0093 is primary. The disposition (settle vs. cancel) is property-internal logic; both paths are abstracted as RELEASE at the catalogue layer."
+    },
+
+    {
+      "id": "OP:SETTLE",
+      "name": "Settle",
+      "definition": "Mark a settlement attempt final, fixing its accountedOutcome against any future reversal.",
+      "state_change": "final(t, s') := TRUE; accountedOutcome(t, s') is locked; absorbing — no subsequent transition may set final(t) back to FALSE or alter accountedOutcome(t).",
+      "examples": [
+        "Validity-proof rollup: postFinalityProof(bytes32 root, bytes proof) advancing the verified prefix",
+        "Two-phase commit: commit(bytes32 attemptId)"
+      ],
+      "iso20022_intents": ["ISO20022:sese.023", "ISO20022:sese.024", "ISO20022:sese.025"],
+      "governs_properties": [
+        "BPO:0090"
+      ],
+      "notes": "BPO:0090 names `final(t,s')` as the sole effect of SETTLE; the absorbing-state semantics make it the principal subject."
+    },
+    {
+      "id": "OP:COMPENSATE",
+      "name": "Compensate",
+      "definition": "Execute the compensating action that reverses a failed multi-leg settlement attempt, restoring pre-attempt balances for every participating party.",
+      "state_change": "For each executed leg L_i of attempt A: revertEffect(L_i) is applied to undo its accounting effect; status(A, s') := reverted; per-party v(p, a) restored to v(p, a) at attempt-start.",
+      "examples": [
+        "Saga-pattern compensating transaction",
+        "Two-phase commit abort: abort(bytes32 attemptId)"
+      ],
+      "governs_properties": [
+        "BPO:0091"
+      ],
+      "notes": "BPO:0091 names `compensate(A)` in its Hoare clauses as the operation that takes a failed-attempt state to `reverted`. ISO 20022 intents intentionally omitted — see the operation's earlier field."
+    },
+
+    {
+      "id": "OP:FINALIZE-BLOCK",
+      "name": "Finalize Block",
+      "definition": "The finality gadget marks a block (and its prefix) finalized.",
+      "state_change": "ℓ(s') > ℓ(s) for some finalized-prefix length ℓ; once finalized, the block is committed against any subsequent reorg under the protocol's stated fault assumptions.",
+      "examples": [
+        "Casper FFG: justification + finalization at epoch boundaries",
+        "Tendermint commit-block step"
+      ],
+      "governs_properties": [
+        "BPO:0080",
+        { "property": "BPO:0090", "note": "Settlement finality is reparented from the consensus layer: BPO:0090's persistence invariant for SETTLE depends on FINALIZE-BLOCK having fired for the block carrying the settlement record. Composition, not direct quantification — partial." }
+      ],
+      "notes": "BPO:0080 names `ℓ' > ℓ` as the formal effect of FINALIZE-BLOCK (`G F (ℓ' > ℓ)` — the finalized prefix grows infinitely often under fairness)."
+    },
+    {
+      "id": "OP:INCLUDE-TX",
+      "name": "Include Transaction",
+      "definition": "A submitted transaction is placed into a block by the proposer.",
+      "state_change": "tx moves from the mempool / pending set into a block's transaction list; the tx now has a consensus-layer position.",
+      "examples": [
+        "Proposer includes tx from mempool",
+        "Forced-inclusion queue: L1 inbox forces a tx into a future L2 block"
+      ],
+      "governs_properties": [
+        "BPO:0080",
+        "BPO:0081"
+      ],
+      "notes": "BPO:0080's FOL `submitted(tx) ∧ valid(tx) → F finalized(tx)` quantifies over the submission-to-inclusion-to-finalization lifecycle; BPO:0081 (censorship-resistance) forces INCLUDE-TX for honest txs within a bounded window."
+    },
+    {
+      "id": "OP:EXECUTE-TX",
+      "name": "Execute Transaction",
+      "definition": "Execute an admitted transaction at the contract layer — the authorization gate (signature, nonce, threshold) is the entry edge.",
+      "state_change": "Contract state advances per the tx's effects; nextNonce(issuer) := nextNonce(issuer) + 1 on the accepting branch (BPO:0092); on rejection the state is unchanged.",
+      "examples": [
+        "EVM tx admission: signature check + nonce check + intrinsic gas → execution frame",
+        "Meta-transaction relayer: verify EIP-712 signature, advance permit nonce, dispatch"
+      ],
+      "governs_properties": [
+        "BPO:0020",
+        "BPO:0092",
+        { "property": "BPO:0040", "note": "Privileged-call gating constrains EXECUTE-TX when the call target is a privileged op (`privileged ⊆ Op`); not all executions are privileged, so partial." }
+      ],
+      "notes": "Two primary governors in different aspects: BPO:0020 covers atomicity at execution boundaries; BPO:0092 covers per-issuer monotone-nonce admission. Both directly quantify over the tx as a transition."
+    },
+
+    {
+      "id": "OP:APPROVE",
+      "name": "Approve",
+      "definition": "Submit a verified approval witness that contributes to a k-of-n authorization set for a privileged effect.",
+      "state_change": "Approval set A(o, s') := A(o, s) ∪ {σ_signer}, with σ_signer a valid signature from a current validator; |distinct authorized signers| advances toward k.",
+      "examples": [
+        "Multisig: confirmTransaction(uint256 txId) by a confirmation owner",
+        "EIP-712 typed approval: submit signed authorization for an off-chain-aggregated multisig"
+      ],
+      "governs_properties": [
+        "BPO:0041"
+      ],
+      "notes": "BPO:0041 names the approval set `A ⊆ Sig` in its signature and quantifies over `distinct_authorized_signers(A)` in the threshold guard."
+    },
+
+    {
+      "id": "OP:BRIDGE-LOCK",
+      "name": "Bridge Lock",
+      "definition": "Source-side lock of a quantity for an outbound cross-ledger transfer, paired with a destination-side mint.",
+      "state_change": "supply on source ledger remains accounted but is moved into a `locked` partition; emits relay evidence π that the destination ledger consumes to authorize OP:BRIDGE-MINT.",
+      "examples": [
+        "Wrapping-bridge: lockAndEmitEvidence(asset, amount, dstChain, dstReceiver)"
+      ],
+      "governs_properties": [
+        "BPO:0102"
+      ],
+      "notes": "BPO:0102 names `bridge transitions br : Ledger × Ledger × Asset × ℕ × Evidence` and quantifies the conservation invariant over the paired schema — BRIDGE-LOCK is the source side of the paired schema."
+    },
+    {
+      "id": "OP:BRIDGE-MINT",
+      "name": "Bridge Mint",
+      "definition": "Destination-side mint of a representation, paired with a verified source-ledger lock.",
+      "state_change": "supply_{dst}(a) increases by q; gated by relayVerify(π) attesting the paired OP:BRIDGE-LOCK on the source ledger; sum-preserving on Σ_L supply_L(a).",
+      "examples": [
+        "Wrapping-bridge: bridgeMint(asset, amount, sourceChain, evidence)"
+      ],
+      "governs_properties": [
+        "BPO:0102"
+      ],
+      "notes": "Destination side of the paired bridge schema named in BPO:0102; the joint-state conservation invariant `Σ_L supply_L(a) = issuedSupply(a)` is preserved exactly by the LOCK / MINT pairing."
+    },
+    {
+      "id": "OP:BRIDGE-BURN",
+      "name": "Bridge Burn",
+      "definition": "Source-side burn of a representation for an inbound (return) cross-ledger transfer, paired with a destination-side release.",
+      "state_change": "supply_{src}(a) decreases by q; emits relay evidence π that the destination ledger consumes to authorize OP:BRIDGE-RELEASE.",
+      "examples": [
+        "Wrapping-bridge: burnAndEmitEvidence(asset, amount, dstChain, dstReceiver)"
+      ],
+      "governs_properties": [
+        "BPO:0102"
+      ],
+      "notes": "Source side of the return (burn-and-release) leg of the paired bridge schema."
+    },
+    {
+      "id": "OP:BRIDGE-RELEASE",
+      "name": "Bridge Release",
+      "definition": "Destination-side release of a previously-locked quantity, paired with a verified source-ledger burn.",
+      "state_change": "the `locked` partition on the destination ledger decreases by q; the released quantity is credited back to a holder under the destination's account model; gated by relayVerify(π) attesting the paired OP:BRIDGE-BURN.",
+      "examples": [
+        "Wrapping-bridge: bridgeRelease(asset, amount, sourceChain, evidence)"
+      ],
+      "governs_properties": [
+        "BPO:0102"
+      ],
+      "notes": "Destination side of the return leg. Distinct from OP:RELEASE (which acts on an encumbrance, not a cross-ledger lock)."
+    },
+
+    {
+      "id": "OP:UPGRADE",
+      "name": "Upgrade",
+      "definition": "Change a contract's code (implementation pointer) or storage layout under access-control.",
+      "state_change": "implementation pointer / function selector table changes; storage layout σ_v transitions to σ_{v'} ; required to be append-only with previously-assigned slots fixed (BPO:0030).",
+      "examples": [
+        "ERC-1967 proxy: upgradeTo(address newImplementation)",
+        "EIP-2535 diamond: diamondCut(IDiamondCut.FacetCut[] _cut, address _init, bytes _calldata)",
+        "ERC-7201 namespaced-storage upgrade"
+      ],
+      "governs_properties": [
+        "BPO:0030",
+        { "property": "BPO:0040", "note": "UPGRADE is itself a privileged operation; access-control correctness applies to the authorization of upgrade transitions. Partial — covers the auth aspect, not the layout-preservation invariant." }
+      ],
+      "notes": "BPO:0030's signature explicitly addresses upgrades (`refinement relation σ_v ⊑ σ_{v'} between successive layouts that keeps every previously-assigned slot fixed`)."
+    }
+  ],
+
+  "candidates_pending_grounding": [
+    { "id": "OP:PROPOSE-BLOCK", "rationale": "BPO:0080 mentions block production in its `observability` section but its formalization quantifies only over outcomes — the finalized-prefix length ℓ growing, and the submitted→finalized lifecycle for transactions — never over a named `propose` transition. Fails inclusion bar (b): no current property's formalization treats PROPOSE-BLOCK as a distinct kind of state change. Will promote to operations[] only if a future property's formalization names a propose transition; the catalogue does not edit a property to justify an operation." },
+    { "id": "OP:EMIT-EVENT",   "rationale": "BPO:0072 (public auditability) makes events load-bearing via the `Consequential ⊆ Op` set, but emission is a SIDE EFFECT of other operations rather than a primary state change. No current property models EMIT-EVENT as a distinct kind of state change, so it does not meet the inclusion bar." },
+    { "id": "OP:VERIFY-PROOF", "rationale": "The on-chain verifier call is a kind of OP:EXECUTE-TX; BPO:0070 (knowledge soundness) is about proof-system soundness, not about an op called VERIFY. Would only be admitted if a property modelled the verifier-call's state change as distinct from generic EXECUTE-TX." },
+    { "id": "OP:PROVE",        "rationale": "Off-chain witness generation; not a state change in the modelled system. Fails inclusion bar (a)." },
+    { "id": "OP:FORK",         "rationale": "No property currently quantifies over a fork as a distinct kind of state change. Candidate for the future if a reorg-handling property is authored." },
+    { "id": "OP:REORG",        "rationale": "Same as OP:FORK." },
+    { "id": "OP:SLASH",        "rationale": "BPO:0080 mentions Byzantine bounds but does not model slashing as a transition. Candidate for the future if a slashing-conditioned liveness property is authored." }
+  ]
+}

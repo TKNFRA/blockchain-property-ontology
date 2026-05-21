@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bpo.spec/mappings/operations.catalogue.schema.json",
+  "title": "BPO Abstract Operations Catalogue",
+  "description": "Machine-readable catalogue of the abstract operations (kinds of state change) that BPO properties quantify over. Operations are deliberately abstract — function signatures appear only under each operation's `examples` field and are explicitly non-normative. This JSON Schema fixes the file SHAPE; internal integrity (id uniqueness, governs_properties closure into the BPO corpus, iso20022_intents closure into mappings/iso20022.framework.json) is enforced by schema/validate_refs.py.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["framework", "title", "version", "license_note", "inclusion_bar", "operations"],
+  "properties": {
+    "framework":     { "const": "OPERATIONS" },
+    "title":         { "type": "string" },
+    "version":       { "type": "string" },
+    "license_note":  { "type": "string" },
+    "inclusion_bar": { "type": "string", "description": "The written test a candidate must pass to be admitted to operations[]. Enforced by review, not by code." },
+    "operations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "definition"],
+        "properties": {
+          "id":           { "type": "string", "pattern": "^OP:[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$" },
+          "name":         { "type": "string" },
+          "definition":   { "type": "string", "description": "One-line paraphrased definition in our own words." },
+          "state_change": { "type": "string", "description": "The formal effect on state, in the corpus's signature vocabulary." },
+          "examples": {
+            "type": "array",
+            "description": "Illustrative function signatures across platforms. NON-NORMATIVE — the ontology does not commit to maintaining function-level coverage.",
+            "items": { "type": "string" }
+          },
+          "iso20022_intents": {
+            "type": "array",
+            "description": "ISO 20022 message ids (and optionally components/elements) whose business intent this operation realizes. Closure-checked against mappings/iso20022.framework.json by schema/validate_refs.py.",
+            "items": { "type": "string", "pattern": "^ISO20022:(?:[a-z]+\\.[0-9]{3}|cmp/[A-Za-z][A-Za-z0-9]*|elem/[A-Za-z][A-Za-z0-9]*)$" }
+          },
+          "governs_properties": {
+            "type": "array",
+            "description": "BPO properties whose formalization governs this operation. Plain string for clean cases, {property, note} object when authorial judgment is in play (e.g. partial coverage). Closure-checked against the property corpus by schema/validate_refs.py.",
+            "items": {
+              "oneOf": [
+                { "type": "string", "pattern": "^BPO:[0-9]{4,}$" },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["property"],
+                  "properties": {
+                    "property": { "type": "string", "pattern": "^BPO:[0-9]{4,}$" },
+                    "note":     { "type": "string" }
+                  }
+                }
+              ]
+            }
+          },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "candidates_pending_grounding": {
+      "type": "array",
+      "description": "Candidates considered but held out of the catalogue because no current BPO property quantifies over them as a distinct kind of state change. Tracked explicitly so they are not silently re-proposed; admitted to operations[] only when at least one property's formalization governs them.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "rationale"],
+        "properties": {
+          "id":        { "type": "string", "pattern": "^OP:[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$" },
+          "rationale": { "type": "string" }
+        }
+      }
+    }
+  }
+}
