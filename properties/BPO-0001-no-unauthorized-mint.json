@@ -40,6 +40,7 @@
   },
   "formalization": {
     "signature": "Sorts: Addr, Val=Nat. State s. Functions: totalSupply: State -> Val ; bal: State x Addr -> Val. Predicate: hasRole_MINTER: State x Addr -> Bool. Transitions s --[tx]--> s' with tx = (sender, selector, args).",
+    "symbols": ["Addr", "Val", "State", "totalSupply", "bal", "hasRole_MINTER", "sender", "selector", "args"],
     "first_order_logic": "Conservation (state invariant):  forall s reachable .  totalSupply(s) = SUM_{a:Addr} bal(s,a).\nGuarded monotonicity (transition invariant):  forall s,s',tx . ( s --[tx]--> s'  /\\  totalSupply(s') > totalSupply(s) )  ->  ( isMint(tx.selector)  /\\  hasRole_MINTER(s, tx.sender)  /\\  totalSupply(s') - totalSupply(s) = mintedAmount(tx) ).\nNo-side-mint:  forall s,s',tx . ( s --[tx]--> s' /\\ ~isMint(tx.selector) ) -> totalSupply(s') <= totalSupply(s).",
     "temporal_logic": {
       "ltl": "G( (totalSupply increases between consecutive states) -> (last action was an authorized mint) )  -- expressed with action propositions a_mint, a_authz: G( supplyUp -> (a_mint /\\ a_authz) )",
@@ -52,7 +53,11 @@
     ],
     "state_machine": "Two-color transition partition: GREEN transitions (mint under guard) may raise the supply observable; all other (BLACK) transitions must preserve or lower it. The property is the assertion that the LTS contains no BLACK edge that raises supply and no GREEN edge that fires without the guard predicate.",
     "type_theoretic": "Model the mint capability as a linear/affine resource (a non-duplicable token of authority): mint : MinterCap -o (Addr -> Val -> Unit), where MinterCap cannot be forged or duplicated. Supply increase is then typed as consuming an authorization witness, making 'mint without capability' ill-typed. Realizable via capability-based access control or session types over roles.",
-    "algebraic": "(Val, +, 0) commutative monoid; balances form a finitely-supported map Addr ->_fin Val; totalSupply is the monoid homomorphism (fold +). Conservation states totalSupply = the fold; mint is the unique generator permitted to act non-homomorphically on the fold under guard."
+    "algebraic": "(Val, +, 0) commutative monoid; balances form a finitely-supported map Addr ->_fin Val; totalSupply is the monoid homomorphism (fold +). Conservation states totalSupply = the fold; mint is the unique generator permitted to act non-homomorphically on the fold under guard.",
+    "bindings": [
+      { "symbol": "Addr",           "element": "ISO20022:cmp/PartyIdentification", "note": "Direct: `Addr` is the sort of principals in the blockchain account model; ISO 20022 carries the same party-identity concept via PartyIdentification. Both `bal: State × Addr → Val` and `hasRole_MINTER : State × Addr → Bool` quantify per-Addr, i.e. per PartyIdentification." },
+      { "symbol": "hasRole_MINTER", "element": "ISO20022:elem/PartyRole",          "note": "Partial (role-membership): the predicate `hasRole_MINTER(s, p)` tests whether p holds the MINTER role at state s — the membership question ISO 20022's PartyRole element answers. The binding captures the role-test semantics; the specific role identifier (here `MINTER`) is the value PartyRole carries for this predicate." }
+    ]
   },
   "relationships": [
     { "type": "refines", "target": "BPO:0101", "note": "no-unauthorized-mint is one refinement leg of economic Conservation-of-Value (BPO:0101, economic level)." },

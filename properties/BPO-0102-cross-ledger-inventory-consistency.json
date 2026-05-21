@@ -34,6 +34,7 @@
   },
   "formalization": {
     "signature": "Ledgers L_1, ..., L_n; per-ledger supply supply_L : Asset × State_L → ℕ; issuedSupply : Asset × JointState → ℕ; bridge transitions br : Ledger × Ledger × Asset × ℕ × Evidence; joint state = (s_1, ..., s_n); relayVerify : Evidence × Ledger × Ledger → Bool.",
+    "symbols": ["Ledger", "Asset", "supply_L", "issuedSupply", "JointState", "br", "Evidence", "relayVerify"],
     "first_order_logic": "Conservation invariant:  ∀ joint state (s_1, ..., s_n) reachable, ∀ a . Σ_L supply_L(a, s_L) = issuedSupply(a, (s_1, ..., s_n)).\nPaired bridge transition:  ∀ br(L_src, L_dst, a, q, π) accepted: relayVerify(π, L_src, L_dst) = 1 ∧ supply_{L_src}(a) decreases by q at L_src ∧ supply_{L_dst}(a) increases by q at L_dst, in a paired joint transition.\nNo unpaired mint:  ∀ joint transition that changes supply_L(a) by +q : there exists a paired -q change at the source ledger evidenced by π with relayVerify(π) = 1.\nIssuance:  issuedSupply changes only at the home ledger of the asset via the asset's native issuance / burn authorization.",
     "temporal_logic": {
       "ltl": "G( Σ_L supply_L(a) = issuedSupply(a) )   ∧   G( supplyChange(L_dst, a, +q) → ∃ π : relayVerify(π) ∧ pairedBurn(L_src, a, q, π) )",
@@ -45,7 +46,10 @@
     ],
     "state_machine": "Joint automaton over n networks. Edges are either per-ledger transitions (which must preserve the joint sum by acting only on the home-ledger's authorized issuance/burn or by being internal moves with no supply effect) or paired bridge transitions (which atomically move q units from one ledger's representation to another's at the joint level). The property is that no edge breaks the joint sum identity.",
     "type_theoretic": "Bridge transfers are typed as joint-state-preserving moves of a single linear resource (a supply unit) between per-ledger representations. The destination-mint requires consuming a verifiable witness of the source-burn (a typed evidence object) which is itself a single-use, replay-resistant capability bound to the (source, destination, amount, nonce) tuple.",
-    "algebraic": "(ℕ, +) commutative monoid per asset; supply_L is a per-ledger projection; Σ_L supply_L is the additive aggregate; bridge transitions are sum-preserving automorphisms of the joint state."
+    "algebraic": "(ℕ, +) commutative monoid per asset; supply_L is a per-ledger projection; Σ_L supply_L is the additive aggregate; bridge transitions are sum-preserving automorphisms of the joint state.",
+    "bindings": [
+      { "symbol": "Asset", "element": "ISO20022:cmp/FinancialInstrument", "note": "Direct correspondence: the property's `Asset` sort is the instrument whose cross-ledger representations sum to `issuedSupply`; ISO 20022 identifies the same instrument via FinancialInstrument (typically by ISIN). The conserved aggregate `Σ_L supply_L(a) = issuedSupply(a)` is per FinancialInstrument." }
+    ]
   },
   "relationships": [
     { "type": "refines", "target": "BPO:0101", "note": "BPO:0101 is the within-ledger conservation invariant; BPO:0102 lifts the conservation discipline to the joint cross-ledger state, with bridge mints/burns as the cross-network analogue of internal flows." },

@@ -36,6 +36,7 @@
   },
   "formalization": {
     "signature": "Validators V(s) ⊆ Addr; threshold k(s) ∈ ℕ with k(s) ≤ |V(s)| = n(s); approval set A ⊆ Sig; sig: Addr × Msg → Sig (verified signature); privileged ⊆ Op; canonical signer identity id: Sig → Addr.",
+    "symbols": ["Validators", "threshold", "approval", "sig", "privileged", "Op", "Addr", "Msg", "Sig", "id"],
     "first_order_logic": "Threshold guard:  ∀ s, s', o, A . ( s --[o, A]--> s' ∧ o ∈ privileged ) → |{ id(σ) : σ ∈ A ∧ id(σ) ∈ V(s) ∧ sig.verify(id(σ), msg(o,s), σ) }| ≥ k(s).\nDistinct counting:  the set above is over CANONICAL signer identity, so multiplicity of any one signer in A contributes at most 1.\nConfiguration integrity:  ∀ s, s', t . ( V(s') ≠ V(s) ∨ k(s') ≠ k(s) ) ∧ s --[t]--> s' → authorizedGovernance(t).",
     "temporal_logic": {
       "ltl": "G( privilegedEffect(o) → |distinct_authorized_signers(A)| ≥ k )   ∧   G( change(V) ∨ change(k) → authorizedGovernance )",
@@ -47,7 +48,11 @@
     ],
     "state_machine": "Two-layer automaton: (1) the protected-operation layer, each privileged edge gated by the threshold check against the current (V, k); (2) the governance layer, with edges that mutate V or k themselves gated by their own access-control. The property is that the protected layer's guards never accept an under-threshold approval set AND the governance layer mediates every change to (V, k).",
     "type_theoretic": "Approval as an affine (consumable, non-duplicable) witness keyed by (validator identity, operation digest); a privileged call is well-typed only when supplied a multiset of distinct approval witnesses of cardinality ≥ k from the current validator set. Distinct-signer counting becomes a static typing constraint rather than a fragile runtime nominal check.",
-    "algebraic": "Approval multisets under (∪, ∅) form a commutative monoid; the threshold predicate is monotone in approval-set inclusion. (V, k) together form the access-control configuration, modified only by sanctioned governance transitions."
+    "algebraic": "Approval multisets under (∪, ∅) form a commutative monoid; the threshold predicate is monotone in approval-set inclusion. (V, k) together form the access-control configuration, modified only by sanctioned governance transitions.",
+    "bindings": [
+      { "symbol": "Validators", "element": "ISO20022:cmp/PartyIdentification", "note": "Direct (identity aspect): `Validators V(s) ⊆ Addr` declares the validator set as a sort of party identifiers; ISO 20022's PartyIdentification carries the party-identity aspect. Each member of V(s) corresponds to a PartyIdentification." },
+      { "symbol": "Validators", "element": "ISO20022:elem/PartyRole",          "note": "Direct (role aspect): being a validator is itself a role within the multiparty-validation policy; ISO 20022's PartyRole expresses the functional role a party plays. The same `Validators` symbol binds to two distinct ISO 20022 aspects — the party identity (PartyIdentification) and the validator role (PartyRole) — because membership in V(s) carries both." }
+    ]
   },
   "relationships": [
     { "type": "composesWith", "target": "BPO:0040", "note": "Threshold validation rests on the broader access-control correctness framework — sound role-admin DAG, monotone delegation, effective revocation — that governs V and k." },

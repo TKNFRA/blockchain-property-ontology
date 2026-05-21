@@ -34,6 +34,7 @@
   },
   "formalization": {
     "signature": "Settlement attempt A with legs L = (L_1, ..., L_n); deadline d : Timestamp; parties P; value vector v : P × Asset → ℤ; legEffect : Leg × State → State; revertEffect : Leg × State → State; status(A, s) ∈ {pending, finalized, failed, reverted}; compensator : Principal.",
+    "symbols": ["deadline", "parties", "Timestamp", "Asset", "Leg", "legEffect", "revertEffect", "status", "compensator", "Principal"],
     "first_order_logic": "Compensation correctness:  ∀ s, A, p, a . status(A, s) = pending ∧ deadlineElapsed(A, s) → ∃ s_rev reachable from s : status(A, s_rev) = reverted ∧ v(p, a, s_rev) = v(p, a, s_{pre-A}).\nValue conservation across reversal:  ∀ a . Σ_p v(p, a, s_rev) = Σ_p v(p, a, s_{pre-A}).\nBounded reachability:  status(A, s) = pending ∧ deadlineElapsed(A, s) → ◇_{≤ Δ} status(A, ·) = reverted.\nAuthorization:  revert transitions are enabled only by compensator or permissionlessly after deadline, never blockable by a failing party.",
     "temporal_logic": {
       "ltl": "G( (pending(A) ∧ deadlineElapsed(A)) → F_{≤ Δ} reverted(A) )   ∧   G( reverted(A) → ∀p. accounted(p) = preAttempt(p) )",
@@ -46,7 +47,12 @@
     ],
     "state_machine": "Per-attempt automaton: pending → {finalized, failed-with-deadline}. From failed-with-deadline, compensate(A) reaches reverted in a bounded number of transitions; reverted is absorbing. The state-transition diagram has no edge from finalized to reverted (composes with BPO:0090: finality is irrevocable).",
     "type_theoretic": "Each leg L_i is paired with its algebraic inverse revertEffect_i such that legEffect_i ∘ revertEffect_i = id at the accounting level. A well-typed attempt carries the inverse pairs by construction; compensation is the typed composition that applies the inverses to every executed leg.",
-    "algebraic": "(Value-vector, +, 0) is a commutative monoid; revertEffect_i = - legEffect_i on the value-vector projection; compensation = Σ revertEffect_i over executed legs is the identity when summed with the original legEffect_i."
+    "algebraic": "(Value-vector, +, 0) is a commutative monoid; revertEffect_i = - legEffect_i on the value-vector projection; compensation = Σ revertEffect_i over executed legs is the identity when summed with the original legEffect_i.",
+    "bindings": [
+      { "symbol": "parties",  "element": "ISO20022:cmp/PartyIdentification", "note": "Direct correspondence: the property's per-party value-vector ranges over `parties P`; each member of P identifies as an ISO 20022 PartyIdentification. The property's per-party balance restoration `v(p, a, s_rev) = v(p, a, s_pre-A)` is per-PartyIdentification across the failed-attempt unwind." },
+      { "symbol": "deadline", "element": "ISO20022:elem/SettlementDate",     "note": "Partial: the property's `deadline d : Timestamp` is the cutoff after which the compensation path is reachable; ISO 20022's SettlementDate is the intended settlement date. They coincide when the attempt's deadline equals the instructed settlement date. Bound with a partial-projection note: the property uses a timestamp; SettlementDate is date-granular." },
+      { "symbol": "status",   "element": "ISO20022:cmp/TransactionStatus",   "note": "Direct correspondence: `status(A, s) ∈ {pending, finalized, failed, reverted}` is the property's status function; ISO 20022's TransactionStatus carries the same lifecycle (pending → matched → settled / failed / cancelled / reversed). The `reverted` value of the property corresponds to a cancelled/reversed status in ISO 20022; `finalized` corresponds to settled." }
+    ]
   },
   "relationships": [
     { "type": "composesWith", "target": "BPO:0090", "note": "Finality is absorbing: a settlement that reaches FINAL cannot be compensated; this property only handles attempts that did not finalize. The two together carve clean settled-or-reverted outcomes." },

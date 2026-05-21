@@ -38,6 +38,7 @@
   },
   "formalization": {
     "signature": "Value measure V: State → ℝ≥0 (per-asset: Vector). Sanctioned flows: deposit d, withdraw w, mint m, burn b. Internal ⊆ Op (everything else).",
+    "symbols": ["V", "State", "deposit", "withdraw", "mint", "burn", "Internal", "Op"],
     "first_order_logic": "Internal conservation:  ∀ s,s',o . ( o ∈ Internal ∧ s --[o]--> s' ) → V(s') = V(s).\nSanctioned update:  ∀ s,s' . s --[flow]--> s' → V(s') = V(s) + d − w + m − b.\nSolvency (refinement):  ∀ reachable s . assets(s) ≥ liabilities(s).",
     "temporal_logic": { "ltl": "G( V == externalNetInflow + initialValue )   ∧   G( assets ≥ liabilities )", "fairness": "n/a" },
     "hoare": [
@@ -46,7 +47,10 @@
     ],
     "state_machine": "Annotate each transition with its value delta; the property is that internal transitions carry delta 0 and sanctioned ones carry exactly their declared signed flow; solvency is the reachable-state predicate assets ≥ liabilities.",
     "type_theoretic": "Value as a conserved linear resource: internal operations are typed as resource-preserving rearrangements (no creation/destruction), sanctioned flows consume/produce an explicit external-flow witness.",
-    "algebraic": "(Value, +) commutative monoid (or module per-asset); V is the monoid fold over holdings; internal transitions are automorphisms preserving the fold."
+    "algebraic": "(Value, +) commutative monoid (or module per-asset); V is the monoid fold over holdings; internal transitions are automorphisms preserving the fold.",
+    "bindings": [
+      { "symbol": "V", "element": "ISO20022:elem/SettlementAmount", "note": "Partial: V is the per-asset value measure (State → ℝ≥0 per asset); ISO 20022's SettlementAmount carries the monetary value of a settlement leg per asset and currency. V projects onto SettlementAmount per leg; the conservation invariant V' = V + d − w + m − b constrains how SettlementAmount-aggregated values change across sanctioned flows." }
+    ]
   },
   "relationships": [
     { "type": "refinedBy", "target": "BPO:0001", "note": "No-unauthorized-mint is the issuance leg of conservation (the m term is gated)." },

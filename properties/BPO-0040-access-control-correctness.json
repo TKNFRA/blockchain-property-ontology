@@ -37,6 +37,7 @@
   },
   "formalization": {
     "signature": "Principals Prin; Authorities Auth (roles/capabilities); hasAuth: State × Prin × Auth → Bool; policy admits: Op → 2^Auth; privileged ⊆ Op.",
+    "symbols": ["Principals", "Prin", "Authorities", "Auth", "hasAuth", "admits", "privileged", "Op", "State", "Bool"],
     "first_order_logic": "Mediation:  ∀ s,s',o,p . ( s --[o by p]--> s' ∧ o ∈ privileged ) → ∃ a ∈ admits(o) . hasAuth(s,p,a).\nConfiguration integrity:  ∀ s,s',t . ( hasAuth(s',p,a) ≠ hasAuth(s,p,a) ∧ s --[t]--> s' ) → ( t ∈ {grant,revoke} ∧ authorizedAdmin(s, t.sender, a) ).\nNo escalation (monotonicity of delegation):  delegated(a') from a ⇒ a' ⊑ a  (derived authority never exceeds the delegator's).\nRevocation effectiveness:  s --[revoke(p,a)]--> s' ⇒ ¬hasAuth(s',p,a).",
     "temporal_logic": { "ltl": "G( privilegedEffect(o) → authorized(sender,o) )   ∧   G( authChange → authorizedAdmin )", "fairness": "n/a" },
     "hoare": [
@@ -45,7 +46,11 @@
     ],
     "state_machine": "An access-control matrix (Lampson) as state; transitions are gated by the reference monitor; the property is that the monitor mediates every protected transition and the matrix mutates only via authorized commands (cf. HRU safety, here decidable because the command set is finite and fixed).",
     "type_theoretic": "Capabilities as unforgeable affine tokens: a privileged call is well-typed only when supplied a capability witness of the right type; delegation produces a subtype-bounded capability (a' <: a). Role checks are the dynamic residue of this static capability discipline.",
-    "algebraic": "Authorities form a lattice (⊑, ⊔, ⊓) with least authority ⊥; delegation is a meet-bounded operation; admin-of relation is a partial order rooted at the governance authority."
+    "algebraic": "Authorities form a lattice (⊑, ⊔, ⊓) with least authority ⊥; delegation is a meet-bounded operation; admin-of relation is a partial order rooted at the governance authority.",
+    "bindings": [
+      { "symbol": "Principals",  "element": "ISO20022:cmp/PartyIdentification", "note": "Direct: `Principals Prin` is the sort of parties carrying authorities; ISO 20022's PartyIdentification carries the same party-identity concept. Every `hasAuth(s, p, a)` quantifies p over Principals, i.e. per PartyIdentification." },
+      { "symbol": "Authorities", "element": "ISO20022:elem/PartyRole",          "note": "Direct: `Authorities Auth (roles/capabilities)` is the sort of role/capability identifiers; ISO 20022's PartyRole identifies one such role assignment. The property's `hasAuth(s, p, a)` is the role-membership lookup PartyRole expresses in ISO 20022 messaging." }
+    ]
   },
   "relationships": [
     { "type": "composesWith", "target": "BPO:0030", "note": "Authority config (role/admin slots) must be collision-isolated to be tamper-evident." },

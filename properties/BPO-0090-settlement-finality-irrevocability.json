@@ -36,6 +36,7 @@
   },
   "formalization": {
     "signature": "Settlement records t : SettlementID; predicate final : SettlementID × State → Bool; accountedOutcome : SettlementID × State → Outcome (a record of debits, credits, ownership changes); transitions s --[o]--> s'; finalityCert : SettlementID → Cert; verifyCert : Cert → Bool.",
+    "symbols": ["SettlementID", "final", "accountedOutcome", "Outcome", "finalityCert", "Cert", "verifyCert"],
     "first_order_logic": "Persistence:  ∀ s reachable, s' reachable from s, t . final(t, s) → final(t, s') ∧ accountedOutcome(t, s') = accountedOutcome(t, s).\nPublic verifiability:  ∀ s, t . final(t, s) → ∃ c . verifyCert(c) = 1 ∧ c attests final(t).\nNo-bypass:  no transition has effect that contradicts a final settlement's accountedOutcome.",
     "temporal_logic": {
       "ltl": "G( final(t) → G final(t) )   ∧   G( final(t) → G ¬reverted(t) )   ∧   G( final(t) → ∃ verifiable cert )",
@@ -47,7 +48,12 @@
       { "pre": "verifyCert(c) = 1 ∧ c attests final(t)", "command": "verifier accepts c", "post": "outside verifier concludes final(t) under the consensus and crypto assumptions" }
     ],
     "state_machine": "Per-settlement two-color state: PENDING → FINAL. The FINAL color is absorbing: no transition exits it, and no transition changes the accountedOutcome while in FINAL. The state-transition diagram has no edge from FINAL back to PENDING (or to a competing FINAL with a different outcome).",
-    "type_theoretic": "Finality as a non-revocable witness — once issued, it cannot be retracted (an affine-but-persistent token). A settlement reversal would require consuming the finality witness, which is structurally impossible. Provides the type-level discipline behind the runtime invariant."
+    "type_theoretic": "Finality as a non-revocable witness — once issued, it cannot be retracted (an affine-but-persistent token). A settlement reversal would require consuming the finality witness, which is structurally impossible. Provides the type-level discipline behind the runtime invariant.",
+    "bindings": [
+      { "symbol": "SettlementID",     "element": "ISO20022:elem/SettlementTransactionIdentification", "note": "Direct correspondence: the property's per-settlement identifier `t : SettlementID` plays the same role as ISO 20022's SettlementTransactionIdentification — a unique handle for status / confirmation / cancellation messages." },
+      { "symbol": "accountedOutcome", "element": "ISO20022:elem/SettlementAmount",                    "note": "Partial projection: `accountedOutcome` encompasses debits, credits, and ownership changes per the property's signature; SettlementAmount projects the monetary face of this for cash-bearing legs. Ownership-change components of accountedOutcome correspond to ISO 20022's SettlementQuantity / FinancialInstrument fields, not bound at this granularity." },
+      { "symbol": "final",            "element": "ISO20022:cmp/TransactionStatus",                   "note": "The predicate `final : SettlementID × State → Bool` selects the SETTLED (terminal, absorbing) value within ISO 20022's TransactionStatus component — i.e. `final(t, s) = TRUE ⟺ TransactionStatus(t, s) = settled`. Binding to the component because individual status codes are not enumerated in the BPO subset of the framework." }
+    ]
   },
   "relationships": [
     { "type": "dependsOn", "target": "BPO:0080", "note": "Protocol-level finality (no reorg past finalization, no competing finalized prefixes) is the consensus property this rests on; here we lift it to a per-settlement invariant." },
