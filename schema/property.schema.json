@@ -53,6 +53,20 @@
                 }
               }
             },
+            "iso20022": {
+              "type": "array",
+              "description": "Depth-1 cross-walk to the ISO 20022 financial-messaging standard (property ↔ message / business component / data element). Each entry references an ISO 20022 id resolved against mappings/iso20022.framework.json. `relates-to` indicates general relevance; `constrains` indicates the property places a behavioural constraint on operations of this message/component type. Closure is enforced by schema/validate_refs.py the same way DASCP cross-walks are.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "relation"],
+                "properties": {
+                  "id": { "type": "string", "pattern": "^ISO20022:(?:[a-z]+\\.[0-9]{3}|cmp/[A-Za-z][A-Za-z0-9]*|elem/[A-Za-z][A-Za-z0-9]*)$" },
+                  "relation": { "enum": ["relates-to", "constrains"] },
+                  "note": { "type": "string" }
+                }
+              }
+            },
             "other": { "type": "array", "items": { "type": "string" } }
           }
         }
@@ -110,7 +124,12 @@
       "description": "Facet 2 + 16-19. Multiple logics intentionally; a property is over-determined so downstream tools can pick their native encoding. Strings are LaTeX-ish / tool-syntax; not executed by this schema.",
       "additionalProperties": false,
       "properties": {
-        "signature": { "type": "string", "description": "State vocabulary: sorts, functions, predicates the formulae range over." },
+        "signature": { "type": "string", "description": "State vocabulary: sorts, functions, predicates the formulae range over. The canonical declaration site for symbols the property quantifies over; depth-2 ISO 20022 bindings whose property has no `symbols` list fall back to a whole-token regex match against this field." },
+        "symbols": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Optional declarative list of named symbols (sorts, functions, predicates, transition labels) the formalization quantifies over. When present, depth-2 ISO 20022 bindings must reference symbols from this list as exact case-sensitive matches (the structured, trustworthy path). When absent, schema/validate_refs.py falls back to a whole-token regex match against `signature` — case-sensitive, no near-match."
+        },
         "first_order_logic": { "type": "string" },
         "temporal_logic": {
           "type": "object",
@@ -121,7 +140,21 @@
         "state_machine": { "type": "string" },
         "type_theoretic": { "type": "string", "description": "Facet 19." },
         "algebraic": { "type": "string" },
-        "hyperproperty": { "type": "string", "description": "Relational/2-safety/simulator formulation when modal_class includes a hyperproperty." }
+        "hyperproperty": { "type": "string", "description": "Relational/2-safety/simulator formulation when modal_class includes a hyperproperty." },
+        "bindings": {
+          "type": "array",
+          "description": "Depth-2 ISO 20022 binding: each entry maps a formalization symbol to an ISO 20022 element / component / message. The bound `element` must resolve in mappings/iso20022.framework.json; the bound `symbol` must satisfy the symbol-in-formalization check — structured lookup against `formalization.symbols` when present, else whole-token regex against `formalization.signature`. Both checks are enforced by schema/validate_refs.py. A binding that silently mis-resolves would be worse than no binding, so the check is strict and case-sensitive.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["symbol", "element"],
+            "properties": {
+              "symbol": { "type": "string" },
+              "element": { "type": "string", "pattern": "^ISO20022:(?:[a-z]+\\.[0-9]{3}|cmp/[A-Za-z][A-Za-z0-9]*|elem/[A-Za-z][A-Za-z0-9]*)$" },
+              "note": { "type": "string" }
+            }
+          }
+        }
       }
     },
 
