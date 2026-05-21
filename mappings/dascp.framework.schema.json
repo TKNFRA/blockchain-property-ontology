@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bpo.spec/mappings/dascp.framework.schema.json",
+  "title": "DASCP Framework Catalogue",
+  "description": "Machine-readable catalogue of the Digital Asset Securities Control Principles (DASCP) framework (DTCC, Clearstream, Euroclear, May 2024). Authoritative resolution target for DASCP ids referenced from BPO property records via identifiers.external_refs.dascp. This JSON Schema fixes the FILE SHAPE; internal integrity (id uniqueness, mitigates_risks closure, principle closure) is enforced by schema/validate_refs.py.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["framework", "title", "version", "publishers", "principles", "risks", "controls"],
+  "properties": {
+    "framework": { "const": "DASCP" },
+    "title": { "type": "string" },
+    "version": { "type": "string" },
+    "publishers": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "source": { "type": "string" },
+    "license_note": { "type": "string" },
+    "principles": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "title", "priority", "description"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^P[0-9]+$" },
+          "title": { "type": "string" },
+          "priority": { "type": "integer", "minimum": 1 },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "risks": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "principle", "title", "description"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^R[0-9]+$" },
+          "principle": { "type": "string", "pattern": "^P[0-9]+$" },
+          "title": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "controls": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "category", "title", "description", "mitigates_risks"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^C[0-9]+-[LSRN]$" },
+          "category": { "enum": ["L", "S", "R", "N"] },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "mitigates_risks": {
+            "type": "array",
+            "minItems": 1,
+            "description": "Risks this control mitigates. Each entry is either a plain risk id (verbatim from the white paper) or an object {risk, note?} where `note` documents an interpretive judgment (e.g. a per-page split where the white-paper appendix listed multiple risks under a shared Controls column). Closure of risk ids against the framework's risks[] is enforced by schema/validate_refs.py for both forms.",
+            "items": {
+              "oneOf": [
+                { "type": "string", "pattern": "^R[0-9]+$" },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["risk"],
+                  "properties": {
+                    "risk": { "type": "string", "pattern": "^R[0-9]+$" },
+                    "note": { "type": "string" }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}
