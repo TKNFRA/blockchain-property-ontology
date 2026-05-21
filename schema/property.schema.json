@@ -31,7 +31,7 @@
         "industry_terms": { "type": "array", "items": { "type": "string" } },
         "external_refs": {
           "type": "object",
-          "description": "Cross-walk to existing registries so BPO sits *beside* CWE/SWC/DASP rather than re-inventing them.",
+          "description": "Cross-walk to existing registries so BPO sits *beside* CWE/SWC/DASP/DASCP rather than re-inventing them.",
           "additionalProperties": false,
           "properties": {
             "cwe": { "type": "array", "items": { "type": "string" } },
@@ -39,6 +39,20 @@
             "dasp": { "type": "array", "items": { "type": "string" } },
             "cve": { "type": "array", "items": { "type": "string" } },
             "eip": { "type": "array", "items": { "type": "string" } },
+            "dascp": {
+              "type": "array",
+              "description": "Cross-walk to the DASCP framework (DTCC/Clearstream/Euroclear, 2024). Each entry references a DASCP principle (Pn), risk (Rn), or control (Cnn-{L,S,R,N}). The `relation` qualifier distinguishes `establishes` (the BPO property mechanically discharges this DASCP control), `supports` (the BPO property materially contributes), and `partially-supports` (the BPO property covers one facet of a multi-facet control). DASCP ids resolve against mappings/dascp.framework.json; closure is enforced by schema/validate_refs.py the same way BPO: edges are.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "relation"],
+                "properties": {
+                  "id": { "type": "string", "pattern": "^(P[0-9]+|R[0-9]+|C[0-9]+-[LSRN])$" },
+                  "relation": { "enum": ["establishes", "supports", "partially-supports"] },
+                  "note": { "type": "string" }
+                }
+              }
+            },
             "other": { "type": "array", "items": { "type": "string" } }
           }
         }
