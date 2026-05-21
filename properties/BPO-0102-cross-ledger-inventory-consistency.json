@@ -1,0 +1,95 @@
+{
+  "id": "BPO:0102",
+  "slug": "cross-ledger-inventory-consistency",
+  "title": "Cross-Ledger Inventory Consistency (Conservation Across Networked Representations)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["multi-ledger supply conservation", "bridge mint-and-burn pairing", "cross-network inventory invariant", "global representations sum"],
+    "academic_terms": ["distributed conservation invariant", "joint-state inductive invariant across protocols"],
+    "industry_terms": ["bridge solvency", "lock-and-mint integrity", "burn-and-release integrity", "wrapped-asset 1:1 backing"],
+    "external_refs": {
+      "dascp": [
+        { "id": "C51-N", "relation": "partially-supports", "note": "Formalizes the supply-conservation core of C51-N (sum of cross-ledger representations equals issued supply); the broader 'shared data' dimension of C51-N (reconciliation of non-supply data such as identity, transaction history) is intentionally not covered here — that is a separate cross-ledger data-consistency obligation that would need its own property." }
+      ]
+    }
+  },
+  "classification": {
+    "modal_class": ["safety"],
+    "deontic_role": ["invariant", "guarantee"],
+    "domains": ["cross-chain", "bridge", "settlement", "defi", "economic"],
+    "abstraction_levels": ["protocol", "systemic", "economic"],
+    "verification_modalities": ["model-checking", "interactive-theorem-proving", "cryptographic-proof", "smt"],
+    "decidability": "computationally-conditional"
+  },
+  "descriptions": {
+    "semantic": "Across every ledger L_1, ..., L_n that holds a representation of asset a — native issuance on its home ledger plus any number of bridged / wrapped representations elsewhere — the sum of representations equals the asset's globally issued supply. That sum changes only via authorized bridge transfer protocols whose mint-on-destination and burn-on-source operations are coupled such that the joint sum is conserved across the cross-network state transition.",
+    "system_theoretic": "A conservation invariant on the JOINT network state. The state vocabulary is the cross-product of per-ledger states; the property asserts a relation `Σ_L supply_L(a) = issuedSupply(a)` is monotone-respected by every bridge protocol transition and by every per-ledger internal transition. It is single-trace at the joint level (one execution of the multi-network system) — NOT a hyperproperty — but it requires modelling the joint state rather than any single ledger in isolation.",
+    "security": "The economic backbone of any bridge or wrapped-asset design. Without cross-ledger consistency, a bridge bug or a desynchronization between the source-burn and destination-mint creates unbacked supply on the destination ledger or stranded supply on the source ledger — both are catastrophic. The 'wrapped-without-backing' inflation, and the 'burned-but-not-released' loss, are the canonical failures; the property is the negation of those failure modes.",
+    "execution_semantics": "Realized by paired mint/burn operations across ledgers, coordinated by a bridge relay protocol that proves to the destination chain that a source-chain burn (or lock) happened, and vice versa for redemption. The pairing must be atomic at the joint level: either both legs commit or neither. Violations live in: a destination-mint accepted without verifiable evidence of the paired source-burn / source-lock; a source-burn that releases without verifying the destination-burn for redemption; a relay protocol that can be replayed (re-presenting the same evidence to a destination chain twice); and a bridge upgrade or compromise that re-mints without burning.",
+    "formal_verification": "A 1-safety joint-state invariant. Establishing it requires (i) modelling the joint state of the participating ledgers, (ii) showing each per-ledger transition preserves Σ_L supply_L (only authorized bridge mints/burns change it, and they do so in paired fashion), and (iii) discharging the bridge-relay soundness — the relay's proof or attestation that a paired event happened on the other chain is itself a cryptographic / committee assumption. The within-ledger conservation half is discharged by BPO:0101 instantiated per ledger; the cross-ledger half is the new content here; the relay-soundness half is the load-bearing accepted-undischarged assumption."
+  },
+  "formalization": {
+    "signature": "Ledgers L_1, ..., L_n; per-ledger supply supply_L : Asset × State_L → ℕ; issuedSupply : Asset × JointState → ℕ; bridge transitions br : Ledger × Ledger × Asset × ℕ × Evidence; joint state = (s_1, ..., s_n); relayVerify : Evidence × Ledger × Ledger → Bool.",
+    "first_order_logic": "Conservation invariant:  ∀ joint state (s_1, ..., s_n) reachable, ∀ a . Σ_L supply_L(a, s_L) = issuedSupply(a, (s_1, ..., s_n)).\nPaired bridge transition:  ∀ br(L_src, L_dst, a, q, π) accepted: relayVerify(π, L_src, L_dst) = 1 ∧ supply_{L_src}(a) decreases by q at L_src ∧ supply_{L_dst}(a) increases by q at L_dst, in a paired joint transition.\nNo unpaired mint:  ∀ joint transition that changes supply_L(a) by +q : there exists a paired -q change at the source ledger evidenced by π with relayVerify(π) = 1.\nIssuance:  issuedSupply changes only at the home ledger of the asset via the asset's native issuance / burn authorization.",
+    "temporal_logic": {
+      "ltl": "G( Σ_L supply_L(a) = issuedSupply(a) )   ∧   G( supplyChange(L_dst, a, +q) → ∃ π : relayVerify(π) ∧ pairedBurn(L_src, a, q, π) )",
+      "fairness": "Not required for the conservation invariant (pure safety). The compositional 'eventually-consistent representations' liveness claim (the destination mint eventually fires after the source burn) does need per-ledger consensus liveness (BPO:0080 per network) but is a separate property."
+    },
+    "hoare": [
+      { "pre": "joint state preserves Σ_L supply_L = issuedSupply", "command": "any internal per-ledger transition", "post": "joint state still preserves Σ_L supply_L = issuedSupply" },
+      { "pre": "relayVerify(π, L_src, L_dst) = 1 ∧ π attests pairedBurn(L_src, a, q)", "command": "bridgeMint(L_dst, a, q, π)", "post": "supply_{L_dst}(a) += q ∧ joint invariant preserved" }
+    ],
+    "state_machine": "Joint automaton over n networks. Edges are either per-ledger transitions (which must preserve the joint sum by acting only on the home-ledger's authorized issuance/burn or by being internal moves with no supply effect) or paired bridge transitions (which atomically move q units from one ledger's representation to another's at the joint level). The property is that no edge breaks the joint sum identity.",
+    "type_theoretic": "Bridge transfers are typed as joint-state-preserving moves of a single linear resource (a supply unit) between per-ledger representations. The destination-mint requires consuming a verifiable witness of the source-burn (a typed evidence object) which is itself a single-use, replay-resistant capability bound to the (source, destination, amount, nonce) tuple.",
+    "algebraic": "(ℕ, +) commutative monoid per asset; supply_L is a per-ledger projection; Σ_L supply_L is the additive aggregate; bridge transitions are sum-preserving automorphisms of the joint state."
+  },
+  "relationships": [
+    { "type": "refines", "target": "BPO:0101", "note": "BPO:0101 is the within-ledger conservation invariant; BPO:0102 lifts the conservation discipline to the joint cross-ledger state, with bridge mints/burns as the cross-network analogue of internal flows." },
+    { "type": "composesWith", "target": "BPO:0090", "note": "A finalized source-burn followed by a destination-mint that respects the joint sum yields a final cross-ledger transfer; finality at the source is a precondition for the destination to safely mint." },
+    { "type": "dependsOn", "target": "BPO:0080", "note": "Each participating ledger's consensus liveness is required for bridge protocols to eventually complete; the safety half does not require liveness but the compositional liveness claim does." },
+    { "type": "composesWith", "target": "BPO:0092", "note": "Replay-resistance: each bridge-relay evidence must be single-use across (src, dst, amount, nonce) so it cannot be replayed to mint twice on the destination." },
+    { "type": "mitigates", "target": "ATK:cross-ledger-inflation" },
+    { "type": "mitigates", "target": "ATK:bridge-mint-without-burn" },
+    { "type": "mitigates", "target": "ATK:relay-evidence-replay" },
+    { "type": "mitigates", "target": "ATK:bridge-burn-without-release" }
+  ],
+  "attack_surface": [
+    { "class": "bridge-mint-without-evidence", "pattern": "the destination ledger's bridge contract mints without verifying source-burn evidence, or with a verifier that admits forged evidence", "incident_refs": ["UNVERIFIED: historical bridge inflation incidents — verify before citing"], "notes": "The relay-verifier is the load-bearing component; its soundness is the third assumption below." },
+    { "class": "relay-evidence-replay", "pattern": "the same source-burn evidence is presented twice to the destination, minting twice for one burn", "incident_refs": [], "notes": "Composes with BPO:0092: evidence must carry a single-use nonce keyed to the destination so it cannot be re-presented." },
+    { "class": "bridge-burn-without-release", "pattern": "the source ledger burns but the destination never mints due to a relay failure or a verifier rejection that doesn't surface to the source", "incident_refs": [], "notes": "Composes with BPO:0091: a failed cross-ledger transfer must trigger a release on the source side (un-burn or compensating credit)." },
+    { "class": "validator-set-rotation-race", "pattern": "a committee-based relay's validator set rotates between the source-burn and destination-mint, accepting evidence from a now-deprecated set or rejecting evidence from the new one", "incident_refs": [], "notes": "Validator-set commitment included in the evidence; rotation moves forward only and the destination tracks the evolution explicitly." },
+    { "class": "asymmetric-finality", "pattern": "the destination accepts evidence rooted in a source state that later reorgs past its finality boundary, leaving the destination minted against a no-longer-final source-burn", "incident_refs": [], "notes": "Composes with BPO:0090: only finalized source-burns may be presented as evidence." }
+  ],
+  "observability": {
+    "events": ["BridgeBurnInitiated(L_src, a, q, nonce)", "BridgeEvidenceEmitted(L_src, π)", "BridgeMintCompleted(L_dst, a, q, π)", "JointSupplyChecked(a, total)"],
+    "metrics": ["Σ_L supply_L(a) − issuedSupply(a) per asset (target: always 0)", "outstanding source-burns without matching destination-mints past the relay's expected bound (target: 0)", "outstanding destination-mints not matched to a verifiable source-burn (target: 0)"],
+    "invariant_checkpoints": ["Σ_L supply_L = issuedSupply at every joint-state snapshot", "every bridge mint has a verifiable paired burn", "every bridge burn has a paired mint or a compensating release"],
+    "runtime_assertions": ["off-chain monitor periodically computes Σ_L supply_L and compares to issuedSupply; alert on drift", "destination contract refuses to mint without verifying π"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Joint-state inductive invariant", "tools": ["TLA+/TLC for the protocol layer", "Coq / Isabelle for the joint inductive argument", "Halmos for the per-ledger contracts"], "strength": "bounded-proof", "notes": "Model the n-ledger joint state; show every transition preserves Σ_L supply_L = issuedSupply; bridge transitions discharge via the paired-mint-burn schema." },
+      { "approach": "Bridge-verifier soundness", "tools": ["Certora for the on-chain verifier contract", "EasyCrypt for the underlying cryptographic reduction"], "strength": "bounded-proof", "notes": "Prove the on-chain destination verifier accepts only evidence that genuinely attests a finalized source-burn under the relay's stated security model." },
+      { "approach": "Cross-ledger conservation monitor", "tools": ["off-chain watchers polling per-ledger supplies and the home ledger's issuedSupply"], "strength": "high-coverage-evidence", "notes": "Continuous monitoring of the joint sum identity; alerts on drift; cannot prove the invariant but catches violations quickly in production." }
+    ],
+    "testability": ["any bridge transfer preserves Σ_L supply_L", "replayed evidence rejected on the destination", "reorg of a finalized source-burn does not retroactively justify a destination-mint", "burn-without-mint triggers a release path on the source"]
+  },
+  "enforcement": {
+    "runtime": ["destination contracts verify finalized-source evidence before minting", "single-use evidence nonces keyed to (src, dst, amount)", "off-chain conservation monitors with alerting"],
+    "static": ["bridge-verifier formally verified per the relay's security model", "no path mints destination supply outside the verified bridge entry"],
+    "design_patterns": ["lock-and-mint with finalized-source attestation", "burn-and-release with reverse attestation", "validator-set commitment included in evidence", "single-use evidence nonces (composes with BPO:0092)"]
+  },
+  "assumptions": [
+    { "kind": "economic", "statement": "Per-ledger conservation holds at each participating ledger; the within-ledger value measure is well-defined and conserved by internal transitions.", "discharged_by": "BPO:0101" },
+    { "kind": "synchrony", "statement": "Each participating ledger's consensus is live under its own assumptions, so paired bridge transitions eventually complete.", "discharged_by": "BPO:0080" },
+    { "kind": "cryptographic", "statement": "The bridge relay is sound: the destination ledger accepts a relay evidence only when that evidence genuinely attests a finalized event on the source ledger (whether by ZK validity proof, light-client header verification, or honest-majority committee per the relay design). This is the load-bearing accepted-undischarged assumption: every cross-ledger inventory failure observed in production has bottomed out at relay-soundness, so it is named here as an open dependency rather than buried.", "discharged_by": null }
+  ],
+  "provenance": {
+    "authors": ["BPO seed"],
+    "created": "2026-05-21",
+    "confidence": "draft",
+    "sources": ["bridge-design literature (Zamyatin et al. SoK on Communication across Distributed Ledgers, 2019)", "lock-and-mint vs burn-and-release patterns", "DASCP C51-N text"],
+    "notes": "Authored as the formal version of DASCP C51-N's behavioural core for supply conservation across networks. The 'shared data' (non-supply data reconciliation) dimension of C51-N is intentionally not covered. The third assumption (relay soundness) is the explicit accepted-undischarged ledger entry the maintainer asked to keep visible: every cross-ledger inflation incident in the wild has bottomed out there."
+  }
+}

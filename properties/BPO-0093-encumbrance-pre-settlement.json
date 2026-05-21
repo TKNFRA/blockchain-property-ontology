@@ -1,0 +1,96 @@
+{
+  "id": "BPO:0093",
+  "slug": "encumbrance-pre-settlement",
+  "title": "Encumbrance Pre-Settlement (No Double-Disposal Until Obligation Resolved)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["no-double-spend-until-settled", "settlement encumbrance", "obligation-bound holding lock", "pre-settlement freeze of obligated assets"],
+    "academic_terms": ["resource exclusivity under outstanding obligation", "mutual exclusion on encumbered partition"],
+    "industry_terms": ["DvP encumbrance", "collateral lock", "in-flight asset hold", "atomic-swap HTLC slot"],
+    "external_refs": {
+      "dascp": [
+        { "id": "C47-N", "relation": "partially-supports", "note": "Formalizes single-ledger encumbrance preventing double-spend until settlement. The cross-network encumbrance coordination aspect of C47-N (HTLC-style multi-ledger atomic swaps where the lock spans chains) is broader and belongs to a future cross-ledger property; BPO:0102 covers the cross-ledger inventory side but not the encumbrance-lock half." }
+      ]
+    }
+  },
+  "classification": {
+    "modal_class": ["safety"],
+    "deontic_role": ["invariant", "guarantee", "constraint"],
+    "domains": ["settlement", "contract", "defi", "token", "application"],
+    "abstraction_levels": ["contract", "protocol"],
+    "verification_modalities": ["smt", "symbolic-execution", "model-checking", "runtime-verification"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "When a transfer or settlement obligation is initiated against a holding, the system places an encumbrance on the obligated portion such that no other operation can transfer, pledge, re-encumber, or otherwise dispose of the encumbered portion until the obligation either settles (releasing the encumbrance per the settlement's intended disposition) or is cancelled (releasing the encumbrance back to the holder). The unencumber operation is itself authorized: only settlement-completion or authorized-cancellation paths can release an encumbrance.",
+    "system_theoretic": "A partition-and-exclusivity invariant on the per-holder asset state. Each holding is partitioned into `free` and `encumbered(by_obligation)` components; operations that read `free` cannot touch `encumbered`, and vice versa; the only transitions that move quantity between partitions are encumber, release-on-settle, and release-on-cancel, each guarded by authorization predicates.",
+    "security": "The DvP cornerstone at the contract layer. Without encumbrance, a counterparty can promise an asset for settlement and then transfer it elsewhere before settlement completes — a classic double-disposal failure. Failure modes — encumbrance that doesn't deduct from the free balance, dispose paths that ignore the encumbered partition, release paths that don't require the obligation to have terminated, or a re-encumbrance that double-counts the same units — defeat the guarantee. The property is the negation of those failure modes.",
+    "execution_semantics": "Realized by separate accounting variables `free[holder][asset]` and `encumbered[holder][asset][obligation]` whose sum equals the holder's total balance. The encumber operation deducts from free and credits encumbered[obligation]; the dispose operation reads only free; the release-on-settle operation transfers from encumbered to the settlement counterparty per the obligation's disposition; the release-on-cancel operation transfers from encumbered back to free. Violations live in: dispose paths that read total balance instead of free, missing deduction from free on encumber, release paths without the obligation-terminated check, and storage paths that mutate encumbered out-of-band.",
+    "formal_verification": "A 1-safety invariant. SMT-checkable as: (1) accounting consistency — for every holder, asset: total = free + Σ_o encumbered[o]; (2) exclusivity — no dispose operation reads from encumbered; (3) release-guard — every transition out of encumbered is gated by obligationTerminated(o) AND authorized. Composes with BPO:0020 to ensure a reentrant callback cannot dispose during the encumbrance window."
+  },
+  "formalization": {
+    "signature": "Holder × Asset → ℕ; free : Holder × Asset × State → ℕ; encumbered : Holder × Asset × Obligation × State → ℕ; obligationStatus : Obligation × State → {pending, settled, cancelled}; dispose, encumber, releaseOnSettle, releaseOnCancel ⊆ Op.",
+    "first_order_logic": "Accounting:  ∀ h, a, s . total(h, a, s) = free(h, a, s) + Σ_o encumbered(h, a, o, s).\nDispose-from-free-only:  ∀ s, s', h, a, q . dispose(h, a, q, s, s') → q ≤ free(h, a, s) ∧ free(h, a, s') = free(h, a, s) - q.\nEncumber-deducts-free:  ∀ s, s', o . encumber(h, a, o, q, s, s') → q ≤ free(h, a, s) ∧ free(h, a, s') = free(h, a, s) - q ∧ encumbered(h, a, o, s') = encumbered(h, a, o, s) + q.\nRelease-guarded:  ∀ s, s', o . (encumbered(h, a, o, s') < encumbered(h, a, o, s)) → ( obligationStatus(o, s) ∈ {settled, cancelled} ∧ authorized(releaseOp) ).\nNo-out-of-band:  every transition that mutates `encumbered` is one of encumber, releaseOnSettle, releaseOnCancel.",
+    "temporal_logic": {
+      "ltl": "G( dispose(h, a, q) → q ≤ free(h, a) )   ∧   G( encumbered_decrease(h, a, o) → obligationStatus(o) ∈ {settled, cancelled} )   ∧   G( total(h, a) = free(h, a) + Σ_o encumbered(h, a, o) )",
+      "fairness": "n/a (pure safety)."
+    },
+    "hoare": [
+      { "pre": "q > free(h, a)", "command": "dispose(h, a, q)", "post": "revert" },
+      { "pre": "q ≤ free(h, a) ∧ authorized(encumber, o)", "command": "encumber(h, a, o, q)", "post": "free(h, a) -= q ∧ encumbered(h, a, o) += q" },
+      { "pre": "obligationStatus(o) = settled ∧ authorized(releaseOnSettle)", "command": "releaseOnSettle(h, a, o)", "post": "encumbered(h, a, o) → 0 ∧ counterparty credited per obligation's disposition" }
+    ],
+    "state_machine": "Per-(holder, asset) accounting automaton with the partition (free, encumbered_by_o for each open o); transitions are gated according to the partition discipline. The state-transition diagram has no edge that mutates `encumbered` without invoking encumber, releaseOnSettle, or releaseOnCancel, and no edge that reads `encumbered` from a dispose operation.",
+    "type_theoretic": "Encumbered quantity is a typed obligation-bound resource — a linear capability tagged with the obligation id, distinct from free quantity. The type system rejects any disposal that consumes an obligation-tagged resource without going through release; the release operation consumes the tag along with the quantity, returning untagged (free) or obligation-disposed quantity per its kind.",
+    "algebraic": "(ℕ, +) commutative monoid; `free` and the family of `encumbered_o` are disjoint additive summands whose sum is `total`; encumber/release are sum-preserving moves between summands."
+  },
+  "relationships": [
+    { "type": "composesWith", "target": "BPO:0020", "note": "Atomicity across external-call boundaries: a reentrant callback during the encumbrance window must not bypass the dispose-from-free-only guard." },
+    { "type": "composesWith", "target": "BPO:0040", "note": "Authorization of encumber, releaseOnSettle, releaseOnCancel sits on the broader access-control framework." },
+    { "type": "composesWith", "target": "BPO:0101", "note": "Conservation of value: encumber and release are sum-preserving on the value measure; nothing is created or destroyed by moving between free and encumbered." },
+    { "type": "composesWith", "target": "BPO:0090", "note": "Finality of the underlying settlement implies the encumber-then-releaseOnSettle disposition becomes final and irreversible; finality and encumbrance compose to yield committed transfer." },
+    { "type": "composesWith", "target": "BPO:0091", "note": "Fail-to-settle reversal must invoke releaseOnCancel on every encumbrance the failed attempt placed; the two compose to ensure no asset stays encumbered after a failed attempt." },
+    { "type": "mitigates", "target": "ATK:double-spend-pre-settlement" },
+    { "type": "mitigates", "target": "ATK:permanent-lock-griefing" },
+    { "type": "mitigates", "target": "ATK:encumbrance-bypass-via-dispose" }
+  ],
+  "attack_surface": [
+    { "class": "dispose-reads-total", "pattern": "the dispose operation checks against total balance instead of free balance, allowing transfer of encumbered units", "incident_refs": [], "notes": "Dispose must read free only; the accounting variable used in the check is the load-bearing detail." },
+    { "class": "encumber-without-deduct", "pattern": "encumber credits the encumbered partition but doesn't deduct from free, double-counting the same units", "incident_refs": [], "notes": "Encumber must be a sum-preserving move: free -= q AND encumbered[o] += q in the same atomic transaction." },
+    { "class": "release-without-obligation-termination", "pattern": "a release path can be invoked while the obligation is still pending, effectively cancelling the lock without authorization", "incident_refs": [], "notes": "Every release transition must be guarded by obligationStatus(o) ∈ {settled, cancelled}." },
+    { "class": "out-of-band-encumbered-write", "pattern": "a storage-collision (BPO:0030) or an unprotected admin path mutates `encumbered` directly", "incident_refs": [], "notes": "Composes with BPO:0030 and BPO:0040 to ensure no unguarded write path exists." },
+    { "class": "permanent-encumbrance-griefing", "pattern": "an obligation can be left in pending state indefinitely, stranding the encumbered quantity with no release reachability", "incident_refs": [], "notes": "Composes with BPO:0091: every encumbrance must have a deadline beyond which the release-on-cancel path is reachable." }
+  ],
+  "observability": {
+    "events": ["Encumbered(h, a, o, q)", "ReleasedOnSettle(h, a, o, counterparty)", "ReleasedOnCancel(h, a, o)"],
+    "metrics": ["per-holder accounting invariant: total == free + Σ_o encumbered (target: always true)", "open encumbrances past their parent obligation's deadline (target: 0)"],
+    "invariant_checkpoints": ["post-transaction: total(h, a) == free(h, a) + Σ_o encumbered(h, a, o)", "no dispose touches encumbered", "every encumbered-decrease is paired with an obligation status of settled or cancelled"],
+    "runtime_assertions": ["assert(total == free + sum_encumbered)", "assert(dispose_amount <= free)", "assert(obligation_done before encumbered_decrease)"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Accounting-partition invariant", "tools": ["Certora Prover", "Halmos"], "strength": "proof", "notes": "Prove the partition identity holds across every transition; prove dispose only reads from free; prove release transitions are obligation-guarded." },
+      { "approach": "Invariant fuzzing on encumbrance life cycles", "tools": ["Echidna", "Foundry invariant tests"], "strength": "high-coverage-evidence", "notes": "Stateful handlers randomize encumber / release-on-settle / release-on-cancel / dispose orderings; the partition identity and the dispose-from-free-only invariant must hold." },
+      { "approach": "Static analysis of release-guard coverage", "tools": ["Slither", "custom checkers"], "strength": "high-coverage-evidence", "notes": "Enumerate every storage write to `encumbered`; confirm each is on a guarded encumber/release path." }
+    ],
+    "testability": ["dispose of an encumbered amount reverts", "encumber correctly deducts free", "release while obligation pending reverts", "post-cancel release returns the units to free, not to the counterparty"]
+  },
+  "enforcement": {
+    "runtime": ["explicit free / encumbered accounting variables", "dispose reads free only", "release guarded by obligationStatus check"],
+    "static": ["typed obligation-tagged quantity in the contract data model", "linter: every dispose reads `free`, never `total`"],
+    "design_patterns": ["explicit encumbrance bookkeeping per obligation", "deadline + release-on-cancel for every encumbrance (composes with BPO:0091)", "obligation status state machine pinned to a single source of truth"]
+  },
+  "assumptions": [
+    { "kind": "environmental", "statement": "State-write atomicity across encumber, release, and dispose paths; no reentrant callback can disturb the partition discipline.", "discharged_by": "BPO:0020" },
+    { "kind": "trust", "statement": "The unencumber operation and the encumber operation are correctly access-controlled.", "discharged_by": "BPO:0040" },
+    { "kind": "economic", "statement": "The accounting model is the canonical one — encumber/release are sum-preserving on the value measure.", "discharged_by": "BPO:0101" }
+  ],
+  "provenance": {
+    "authors": ["BPO seed"],
+    "created": "2026-05-21",
+    "confidence": "draft",
+    "sources": ["DvP encumbrance practice", "HTLC atomic-swap pattern (single-ledger half)", "collateral-lock literature in DeFi lending"],
+    "notes": "Authored as the formal version of DASCP C47-N's single-ledger behavioural core. The current coverage report has C47-N partial via BPO:0020; this property upgrades the BPO side of the link but the cross-network encumbrance dimension (multi-ledger atomic swaps where the lock spans chains) remains residual."
+  }
+}

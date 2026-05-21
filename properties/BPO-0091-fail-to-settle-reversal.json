@@ -1,0 +1,96 @@
+{
+  "id": "BPO:0091",
+  "slug": "fail-to-settle-reversal",
+  "title": "Fail-to-Settle Reversal (Bounded Compensating Action Returning Pre-Settlement State)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["settlement unwind", "DvP failure compensation", "bounded reversal of failed settlement", "atomic-or-undo"],
+    "academic_terms": ["compensation correctness", "saga reversibility", "two-phase commit abort safety"],
+    "industry_terms": ["fail-to-settle process", "settlement unwind procedure", "trade rollback"],
+    "external_refs": {
+      "dascp": [
+        { "id": "C49-N", "relation": "partially-supports", "note": "Formalizes the behavioural reversibility core of C49-N (a correct compensating action exists and completes in bounded time); the organizational-procedure aspects of C49-N — runbooks, escalation, manual intervention — are operational and stay out of BPO scope." }
+      ]
+    }
+  },
+  "classification": {
+    "modal_class": ["safety", "guarantee-liveness-conditional"],
+    "deontic_role": ["guarantee", "temporal-commitment"],
+    "domains": ["settlement", "application", "contract"],
+    "abstraction_levels": ["protocol", "contract"],
+    "verification_modalities": ["smt", "model-checking", "interactive-theorem-proving"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "If a multi-leg settlement attempt does not complete — at least one leg fails to finalize or a deadline elapses with the attempt incomplete — the system can execute a compensating action that returns every participating party's accounted balance, ownership state, and entitlement to its pre-attempt value, within a bounded time, regardless of any failing party's continued participation. The compensating action is itself authorized and conserves total value.",
+    "system_theoretic": "A reachability-and-correctness property on the LTS. Reachability (liveness, conditional): from any state in which an attempt is incomplete past its deadline, a state with all-legs-reverted is reachable through compensator-enabled transitions within a bounded number of steps under chain fairness. Correctness (safety): the reachable reverted-state agrees, on every party's accounted vector, with the pre-attempt state.",
+    "security": "The other half of settlement integrity. With finality (BPO:0090) the settled side is irrevocable; with this property the failed side is bounded and clean. The dangerous middle — half-settled trades where one leg moved value and the counterparty's leg failed — is exactly what fail-to-settle handles. Failure modes: a compensating action that double-credits, that strands an asset in an intermediate contract, that requires the failing party's cooperation to complete, or that has no deadline.",
+    "execution_semantics": "Realized by a deadline-bounded settlement protocol with named legs L_1, ..., L_n, each associated with an idempotent revert/refund operation. The protocol enters a TERMINAL state on success (all legs finalized) or on bounded-time failure (deadline elapsed without all legs finalized), in which the revert operations may be invoked permissionlessly or by an authorized compensator. Each revert is the algebraic inverse of its leg's accounting effect. Violations: missing deadline, non-permissionless compensation that depends on the failing party, revert paths that don't conserve value, or revert reachability gated by an action a failing party can withhold.",
+    "formal_verification": "Two obligations. (1) SAFETY — compensation correctness: for every party p and every reachable failed-attempt state, after compensation completes, p's accounted value equals its value at attempt-start. SMT-checkable as a relational property between pre-attempt and post-compensation states. (2) BOUNDED LIVENESS — compensation reachability: from any failed-attempt state, a fully-compensated state is reachable within Δ steps under chain fairness. Model-checked with weak fairness on chain progress (BPO:0080)."
+  },
+  "formalization": {
+    "signature": "Settlement attempt A with legs L = (L_1, ..., L_n); deadline d : Timestamp; parties P; value vector v : P × Asset → ℤ; legEffect : Leg × State → State; revertEffect : Leg × State → State; status(A, s) ∈ {pending, finalized, failed, reverted}; compensator : Principal.",
+    "first_order_logic": "Compensation correctness:  ∀ s, A, p, a . status(A, s) = pending ∧ deadlineElapsed(A, s) → ∃ s_rev reachable from s : status(A, s_rev) = reverted ∧ v(p, a, s_rev) = v(p, a, s_{pre-A}).\nValue conservation across reversal:  ∀ a . Σ_p v(p, a, s_rev) = Σ_p v(p, a, s_{pre-A}).\nBounded reachability:  status(A, s) = pending ∧ deadlineElapsed(A, s) → ◇_{≤ Δ} status(A, ·) = reverted.\nAuthorization:  revert transitions are enabled only by compensator or permissionlessly after deadline, never blockable by a failing party.",
+    "temporal_logic": {
+      "ltl": "G( (pending(A) ∧ deadlineElapsed(A)) → F_{≤ Δ} reverted(A) )   ∧   G( reverted(A) → ∀p. accounted(p) = preAttempt(p) )",
+      "ctl": "AG( (pending(A) ∧ deadlineElapsed(A)) → EF reverted(A) )   under chain fairness",
+      "fairness": "REQUIRED for the bounded-reachability half: weak fairness on chain progress (BPO:0080). NOT required for the correctness-of-compensation half (pure safety)."
+    },
+    "hoare": [
+      { "pre": "status(A) = pending ∧ deadlineElapsed(A)", "command": "compensate(A)", "post": "status(A) = reverted ∧ ∀p,a. v(p, a) = v(p, a, pre-A)" },
+      { "pre": "status(A) = finalized", "command": "compensate(A)", "post": "revert (no compensation after finality)" }
+    ],
+    "state_machine": "Per-attempt automaton: pending → {finalized, failed-with-deadline}. From failed-with-deadline, compensate(A) reaches reverted in a bounded number of transitions; reverted is absorbing. The state-transition diagram has no edge from finalized to reverted (composes with BPO:0090: finality is irrevocable).",
+    "type_theoretic": "Each leg L_i is paired with its algebraic inverse revertEffect_i such that legEffect_i ∘ revertEffect_i = id at the accounting level. A well-typed attempt carries the inverse pairs by construction; compensation is the typed composition that applies the inverses to every executed leg.",
+    "algebraic": "(Value-vector, +, 0) is a commutative monoid; revertEffect_i = - legEffect_i on the value-vector projection; compensation = Σ revertEffect_i over executed legs is the identity when summed with the original legEffect_i."
+  },
+  "relationships": [
+    { "type": "composesWith", "target": "BPO:0090", "note": "Finality is absorbing: a settlement that reaches FINAL cannot be compensated; this property only handles attempts that did not finalize. The two together carve clean settled-or-reverted outcomes." },
+    { "type": "composesWith", "target": "BPO:0093", "note": "Encumbrances placed during an attempt (BPO:0093) must be released by the compensating action; the two compose to ensure no asset stays encumbered after a failed attempt." },
+    { "type": "dependsOn", "target": "BPO:0080", "note": "Bounded-reachability of the reverted state requires consensus liveness for the compensating transactions to be included." },
+    { "type": "dependsOn", "target": "BPO:0101", "note": "Conservation of value across compensation is the value-measure-level invariant the per-party correctness condition rests on." },
+    { "type": "dependsOn", "target": "BPO:0040", "note": "The compensator role and the permissionless-after-deadline edge are governed by access-control correctness." },
+    { "type": "mitigates", "target": "ATK:half-settled-orphan" },
+    { "type": "mitigates", "target": "ATK:fail-to-settle-deadlock" },
+    { "type": "mitigates", "target": "ATK:compensator-blackmail" }
+  ],
+  "attack_surface": [
+    { "class": "missing-deadline", "pattern": "an attempt has no deadline, leaving an indefinite half-settled state with no compensation reachability", "incident_refs": [], "notes": "Every attempt must carry a deadline; deadline-elapse must enable compensation." },
+    { "class": "compensator-blackmail", "pattern": "compensation depends on a transaction only the failing party can submit; the failing party withholds and the half-settled state persists", "incident_refs": [], "notes": "Compensation must be permissionless after deadline OR executable by an authorized compensator independent of the failing party." },
+    { "class": "non-idempotent-revert", "pattern": "the revert path is not idempotent; double-invocation double-credits or double-refunds", "incident_refs": [], "notes": "Mark each leg as 'reverted' on first compensation; subsequent invocations are no-ops." },
+    { "class": "asset-strand-in-intermediate-contract", "pattern": "a leg moved value to an intermediate escrow contract that has no revert path; the asset is recoverable only by upgrade or admin action", "incident_refs": [], "notes": "Every intermediate hold must have an enabled revert path." },
+    { "class": "compensation-after-finality", "pattern": "a compensation path is reachable even after the attempt finalized, allowing reversal of a final settlement", "incident_refs": [], "notes": "Composition with BPO:0090: revert(A) must be guarded by ¬final(A)." }
+  ],
+  "observability": {
+    "events": ["AttemptStarted(A, deadline)", "LegExecuted(A, i)", "AttemptFinalized(A)", "AttemptFailed(A)", "AttemptReverted(A)"],
+    "metrics": ["fraction of failed attempts that reach reverted state", "time from deadline-elapse to reverted state per attempt vs Δ", "open attempts past deadline still pending (target: 0)"],
+    "invariant_checkpoints": ["no party's accounted value differs from pre-attempt after revert", "no attempt is both finalized and reverted", "every attempt past deadline is either finalized or reverted within Δ"],
+    "runtime_assertions": ["assert(reverted(A) → ∀p,a. v(p,a) == v_preAttempt(p,a))", "assert(¬(final(A) ∧ reverted(A)))"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Relational invariant (pre-attempt vs post-revert)", "tools": ["Certora Prover", "Halmos"], "strength": "proof", "notes": "Prove that for every party and every asset, the post-revert accounted value equals the pre-attempt value; prove the value-conservation aggregate." },
+      { "approach": "Bounded-liveness model checking", "tools": ["TLA+/TLC", "ProB"], "strength": "bounded-proof", "notes": "Check from every failed-attempt state, the reverted state is reachable in ≤ Δ steps under chain fairness." },
+      { "approach": "Invariant fuzzing on attempt life cycles", "tools": ["Echidna", "Foundry invariant tests"], "strength": "high-coverage-evidence", "notes": "Stateful handlers that randomize attempt start/finalize/deadline-elapse/revert orderings; assert per-party conservation and no-half-settled-orphan invariants." }
+    ],
+    "testability": ["failed-attempt with no failing-party cooperation reaches reverted within Δ", "post-revert per-party balances match pre-attempt", "revert is no-op after finalization", "double-invocation of revert is no-op"]
+  },
+  "enforcement": {
+    "runtime": ["per-attempt deadline enforced by block.timestamp", "idempotent revert paths with reverted-flag", "permissionless-after-deadline compensation"],
+    "static": ["enumerate every leg and pair it with its revertEffect; require typed inverse pairing", "no compensation path enabled while final(A)"],
+    "design_patterns": ["saga pattern with explicit compensating actions", "two-phase commit with bounded abort", "escrow with deadline-elapse revert edge"]
+  },
+  "assumptions": [
+    { "kind": "synchrony", "statement": "Chain liveness for compensating transactions: the compensating txs eventually get included within Δ.", "discharged_by": "BPO:0080" },
+    { "kind": "economic", "statement": "Each leg has a well-defined algebraic inverse at the accounting level; the system has a precise per-party accounted-value model.", "discharged_by": "BPO:0101" },
+    { "kind": "trust", "statement": "The compensator role and the permissionless-after-deadline edge are correctly access-controlled.", "discharged_by": "BPO:0040" }
+  ],
+  "provenance": {
+    "authors": ["BPO seed"],
+    "created": "2026-05-21",
+    "confidence": "draft",
+    "sources": ["distributed-transactions saga literature", "two-phase commit abort safety", "DvP settlement-unwind practice"],
+    "notes": "Authored as the formal version of DASCP C49-N's behavioural core. Operational fail-to-settle PROCEDURES (organizational runbooks, escalation paths) are intentionally NOT addressed — BPO catalogues system behaviour, not organizational process."
+  }
+}

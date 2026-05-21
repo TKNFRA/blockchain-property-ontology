@@ -1,0 +1,96 @@
+{
+  "id": "BPO:0092",
+  "slug": "transaction-sequencing-and-replay-resistance",
+  "title": "Transaction Sequencing and Replay Resistance (Monotone Nonce Invariant)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["replay protection", "nonce monotonicity", "at-most-once execution", "issuer-ordered execution"],
+    "academic_terms": ["replay freedom", "ordered-execution invariant", "nonce-based serialization"],
+    "industry_terms": ["transaction nonce", "EIP-712 nonce", "anti-replay protection"],
+    "external_refs": {
+      "cwe": ["CWE-294 Authentication Bypass by Capture-replay"],
+      "dascp": [
+        { "id": "C50-N", "relation": "partially-supports", "note": "Formalizes the replay-resistance and per-issuer monotone-ordering content of C50-N; the consensus-level GLOBAL ordering aspect of C50-N (cross-validator ordering of unrelated transactions) belongs to BPO:0080 and is intentionally not covered here." }
+      ]
+    }
+  },
+  "classification": {
+    "modal_class": ["safety"],
+    "deontic_role": ["invariant", "guarantee"],
+    "domains": ["access-control", "contract", "evm", "settlement"],
+    "abstraction_levels": ["bytecode", "contract", "protocol"],
+    "verification_modalities": ["smt", "symbolic-execution", "model-checking", "runtime-verification", "static-dataflow"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "Each authorized transaction can be executed at most once and is processed in a sequential position consistent with its issuer's transaction-ordering policy (typically strict-monotone nonce: every accepted transaction from an issuer has nonce equal to the next expected value, which then advances by one). Any attempt to replay a previously-executed transaction, or to execute one with a stale or skipped nonce, is rejected; nonce state advances only when an authorized transaction from the issuer is admitted.",
+    "system_theoretic": "A 1-safety invariant over per-issuer nonce-state monotonicity. The state vocabulary includes `nextNonce(issuer) : Issuer → ℕ` and a per-issuer history. The property asserts that for every accepted tx from issuer i, tx.nonce = nextNonce(i, s_pre), and post-state has nextNonce(i, s_post) = tx.nonce + 1; for every rejected tx, the nonce state is unchanged.",
+    "security": "Replay is one of the canonical authorization failures: a previously-valid authorization is re-presented to obtain its effect a second time. Failure modes — missing nonce check, mis-incremented nonce, accepted out-of-order tx that effectively replays a stale one, missing domain separation that lets a tx authorized for one context be replayed in another — collapse the at-most-once guarantee. The property is the negation of those failure modes.",
+    "execution_semantics": "Realized by including an issuer-keyed nonce in every authorization-bearing transaction (or signed meta-transaction), checking `tx.nonce == nextNonce[issuer]` at the gate, advancing the nonce on success, and reverting on mismatch. For cross-chain or cross-contract usage, domain separation (chain-id, contract-address, function selector) is part of the authorization payload so the same nonce cannot be replayed across contexts. Violations live in: missing nonce check on a privileged or meta-transaction path, advancing the nonce on failure (creating a skip a replay can exploit), missing domain separation, and storage-collision paths that reset the nonce (composes with BPO:0030).",
+    "formal_verification": "A 1-safety property. SMT-checkable as a parametric rule over every accepting path: success implies (pre-nonce == tx.nonce ∧ post-nonce == pre-nonce + 1) AND for every selector, the only path that mutates nextNonce[issuer] is the accepting path of an authorized tx from issuer. The signature-soundness underpinning is delegated to BPO:0074; here we verify the nonce-state discipline above it. Atomic-execution composition with BPO:0020 ensures a reentrant callback cannot re-execute under the same nonce within the same outer call."
+  },
+  "formalization": {
+    "signature": "Issuer : Addr; nextNonce : Issuer × State → ℕ; tx = (issuer, nonce, payload, sig, domain); accept : State × Tx → Bool.",
+    "first_order_logic": "Nonce gate:  ∀ s, s', tx . accept(s, tx) ∧ s --[tx]--> s' → tx.nonce = nextNonce(tx.issuer, s) ∧ nextNonce(tx.issuer, s') = nextNonce(tx.issuer, s) + 1.\nNo-advance-on-reject:  ∀ s, s', tx . ¬accept(s, tx) ∧ s --[tx]--> s' → nextNonce(tx.issuer, s') = nextNonce(tx.issuer, s).\nNo-out-of-band-write:  every transition that changes nextNonce(i) is an accepting transition of an authorized tx from i.\nDomain separation:  ∀ tx . sig.verify(tx) → tx.domain = expectedDomain (chain-id, contract address).",
+    "temporal_logic": {
+      "ltl": "G( accept(tx) → tx.nonce = nextNonce(tx.issuer) )   ∧   G( ¬accept(tx) → nextNonce unchanged )   ∧   G( nextNonceChange → accept(tx_for_that_issuer) )",
+      "fairness": "n/a (pure safety)."
+    },
+    "hoare": [
+      { "pre": "tx.nonce ≠ nextNonce(tx.issuer)", "command": "execute(tx)", "post": "revert ∧ nextNonce(tx.issuer) unchanged" },
+      { "pre": "tx.nonce = nextNonce(tx.issuer) ∧ sig.verify(tx) ∧ tx.domain = expectedDomain", "command": "execute(tx)", "post": "tx.payload applied ∧ nextNonce(tx.issuer) = old + 1" }
+    ],
+    "state_machine": "Per-issuer monotone counter automaton: nextNonce(i) advances by exactly 1 on each accepted tx from i, stays put on rejection. The cross-issuer state is the disjoint union of per-issuer counters. The property is monotone strict-monotonicity of each counter under accept-edges only.",
+    "type_theoretic": "Each authorization is an affine (single-use) capability keyed by (issuer, nonce, domain). The capability is consumed by acceptance — once consumed, the same (issuer, nonce, domain) triple cannot be re-presented because the issuer's nonce has advanced. Replay becomes a structural type error.",
+    "algebraic": "(ℕ, +1) per issuer; nextNonce is a homomorphism from the accepting-tx-sequence to the natural-number successor; replay attempts to invoke a non-successor and is rejected."
+  },
+  "relationships": [
+    { "type": "composesWith", "target": "BPO:0020", "note": "Atomicity across external-call boundaries: a reentrant callback cannot re-execute the same nonce-bearing tx within the outer call's window." },
+    { "type": "composesWith", "target": "BPO:0040", "note": "The check that tx.issuer is an authorized principal sits on the broader access-control framework; nonce-monotonicity is the per-issuer at-most-once discipline above it." },
+    { "type": "dependsOn", "target": "BPO:0074", "note": "Signature verification on the nonce-bearing transaction depends on signature-scheme unforgeability." },
+    { "type": "dependsOn", "target": "BPO:0030", "note": "The nonce storage slot must be isolated from collision rewrites that could reset or overwrite it." },
+    { "type": "mitigates", "target": "ATK:replay-attack" },
+    { "type": "mitigates", "target": "ATK:nonce-skip-attack" },
+    { "type": "mitigates", "target": "ATK:cross-chain-replay" },
+    { "type": "mitigates", "target": "ATK:cross-context-signature-replay" }
+  ],
+  "attack_surface": [
+    { "class": "missing-nonce-check", "pattern": "an authorization-bearing path (meta-tx, permit, signed action) doesn't check or advance a nonce, so the same signed payload is replayable indefinitely", "incident_refs": [], "notes": "Every signed payload must bind a per-issuer nonce checked at the gate." },
+    { "class": "advance-on-reject", "pattern": "the nonce is advanced before the validity / authorization check, leaving a skipped nonce that a stale-signed tx can later fill or a valid tx can never reach", "incident_refs": [], "notes": "Advance the nonce only on the success branch." },
+    { "class": "cross-context-replay", "pattern": "a signed payload valid in one chain/contract/function is replayable in another because domain separation is missing or incomplete", "incident_refs": [], "notes": "EIP-712 domain separator (chain-id, verifyingContract) and per-action type-hash in the signed payload." },
+    { "class": "nonce-slot-collision", "pattern": "a proxy/delegatecall upgrade or storage-layout drift causes the nonce slot to be overwritten by an unrelated variable, effectively rewinding the nonce", "incident_refs": [], "notes": "Composes with BPO:0030: isolate the nonce slot." },
+    { "class": "non-monotone-recovery", "pattern": "an admin path 'rotates' the nonce backwards under the guise of recovery, enabling replay of previously-valid txs", "incident_refs": [], "notes": "Rotation must move nonce FORWARD only, and require fresh authorization for the new value." }
+  ],
+  "observability": {
+    "events": ["TxAccepted(issuer, nonce)", "TxRejectedNonce(issuer, expected, got)", "NonceAdvanced(issuer, from, to)"],
+    "metrics": ["count(tx rejected with stale nonce)", "count(nonce gaps per issuer; target: 0)", "ratio of accepted vs rejected per issuer (anomaly detection)"],
+    "invariant_checkpoints": ["nextNonce(i) is strictly monotone over accepting transitions", "no transition reduces nextNonce(i)", "post-accept: nextNonce(i) = pre + 1"],
+    "runtime_assertions": ["assert(tx.nonce == nextNonce[tx.issuer])", "assert(nextNonce[tx.issuer] strictly increases by 1)"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Parametric monotone-nonce rule", "tools": ["Certora Prover", "Halmos"], "strength": "proof", "notes": "Prove that every method's success path advances nextNonce(issuer) by 1 and that every nextNonce write occurs on such a success path. Trivially SMT-tractable." },
+      { "approach": "Symbolic execution of authorization paths", "tools": ["Halmos", "Mythril", "hevm"], "strength": "bounded-proof", "notes": "Enumerate every selector that consumes a signed payload; confirm each contains the nonce check and the advance." },
+      { "approach": "Static dataflow on nonce writes", "tools": ["Slither", "custom static checkers"], "strength": "high-coverage-evidence", "notes": "Identify every storage write to a nonce slot and verify each is on an authorized accepting path." },
+      { "approach": "Invariant fuzzing", "tools": ["Echidna", "Foundry invariant tests"], "strength": "high-coverage-evidence", "notes": "Stateful handlers that resubmit accepted txs and submit stale-nonce txs; the strict-monotonicity invariant must hold across all random orderings." }
+    ],
+    "testability": ["replayed tx with same nonce reverts and does not advance nextNonce", "skipped-nonce tx reverts", "rotated-down nonce is rejected", "cross-chain replay of a signed payload rejected by domain check"]
+  },
+  "enforcement": {
+    "runtime": ["per-issuer nonce check at the authorization gate", "advance only on success", "EIP-712 domain separator binding chain-id and verifyingContract"],
+    "static": ["typed single-use authorization capability per (issuer, nonce, domain)", "no proxy-upgrade may relocate the nonce slot"],
+    "design_patterns": ["strict-monotone per-issuer nonce", "include chain-id and contract address in the signed payload", "rotate forward only, never backward"]
+  },
+  "assumptions": [
+    { "kind": "cryptographic", "statement": "The signature scheme used to authorize nonce-bearing transactions is existentially unforgeable.", "discharged_by": "BPO:0074" },
+    { "kind": "environmental", "statement": "Cross-chain and cross-context replay is prevented by sufficient domain separation in the signed payload — chain-id, contract address, function-type-hash. This is the load-bearing wiring detail that the property's correctness rests on outside this contract's scope.", "discharged_by": null }
+  ],
+  "provenance": {
+    "authors": ["BPO seed"],
+    "created": "2026-05-21",
+    "confidence": "draft",
+    "sources": ["EIP-712 typed-data signing", "EIP-2612 permit nonce pattern", "EVM transaction nonce", "replay-attack literature"],
+    "notes": "Authored to formalize the per-issuer monotone-nonce / at-most-once core of DASCP C50-N. The consensus-level global ordering aspect of C50-N (which validator-side mempool/proposer ordering belongs to) is OUT OF SCOPE here and is consensus-property territory (BPO:0080 family)."
+  }
+}

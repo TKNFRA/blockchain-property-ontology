@@ -1,0 +1,95 @@
+{
+  "id": "BPO:0051",
+  "slug": "scoped-pause-safety-bounded",
+  "title": "Scoped Pause Safety (Bounded Halt with Preserved Exit, Parameterized over Scope)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["scoped circuit breaker", "per-account pause", "per-token pause", "partial pause with exit"],
+    "academic_terms": ["scoped controlled shutdown safety", "partial fail-safe reachability"],
+    "industry_terms": ["account pause", "token pause", "selective freeze", "compliance freeze"],
+    "external_refs": {
+      "cwe": ["CWE-693 Protection Mechanism Failure"],
+      "dasp": ["DASP-5 Denial of Service (when scope-unbounded)"],
+      "dascp": [
+        { "id": "C30-S", "relation": "partially-supports", "note": "Account-scope instance: BPO:0051 STRENGTHENS C30-S by requiring the per-account pause to either auto-expire or always permit a forced-recovery path; C30-S's white-paper text mandates the pause capability but not its boundedness." },
+        { "id": "C31-S", "relation": "partially-supports", "note": "Token-scope instance: BPO:0051 STRENGTHENS C31-S in the same way at per-token scope; the freeze-forever-by-scope failure mode is excluded by construction here but not by C31-S as written." }
+      ]
+    }
+  },
+  "classification": {
+    "modal_class": ["safety", "guarantee-liveness-conditional"],
+    "deontic_role": ["guarantee", "capability", "constraint", "temporal-commitment"],
+    "domains": ["contract", "defi", "governance", "token", "access-control"],
+    "abstraction_levels": ["contract", "protocol"],
+    "verification_modalities": ["smt", "model-checking", "symbolic-execution"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "Given a well-defined scope σ — system, per-account, per-token, or any combination drawn from the access-control configuration — when σ is in the paused mode, every value-moving transition whose effect intersects σ is disabled (safety); the pause of σ can be entered only by a principal authorized for σ and lifted only by an authorized path; and the pause cannot deprive entitled parties within σ of their funds indefinitely: it either auto-expires after a bounded delay or always leaves a forced-recovery edge open for entitled withdrawals at σ.",
+    "system_theoretic": "A mode-switched LTS whose mode space is the product of per-scope on/off flags; the pause flag of σ restricts the σ-touching transition relation to non-value-moving (and recovery) transitions, plus a meta-constraint that σ's paused mode is not absorbing for entitled exits at σ (bounded sojourn or always-available exit edge whose enabling is mode-independent at σ).",
+    "security": "Scoped pause is the granular form of the circuit-breaker control: it lets a system contain an active exploit, a compliance event, or a custody dispute to a single account or token without freezing every honest user. The unbounded-pause-by-scope failure mode is real — a per-account pause without an exit is the same seizure-by-freeze as a system-wide one, just narrower. This property excludes that failure by construction.",
+    "execution_semantics": "A `whenScopeNotPaused(σ)` modifier gates value-moving functions whose effect-set intersects σ. Pause and unpause are σ-authorized actions. The bounded clause adds either a timelocked auto-unpause at σ (block.timestamp ≥ pausedAt(σ) + maxPause(σ) ⇒ effectively unpaused for σ) or an always-callable forced-exit-at-σ that ignores the pause flag for entitled withdrawals at σ. Violations: scope-pause without an exit, coverage gaps (a value-moving path inside σ that lacks the σ-guard), unprivileged scope-pause, or a scope-pause that suspends the very recovery edge intended to escape it.",
+    "formal_verification": "Two obligations per scope σ. (1) SAFETY — under paused(σ), no value-moving σ-touching transition is enabled (model-check / SMT over the σ-gated transition set, plus coverage that every value-moving selector whose effects intersect σ is σ-gated). (2) BOUNDED LIVENESS — paused(σ) is not absorbing for entitled exits at σ; requires the same fairness machinery as BPO:0002 (or a structural escape edge whose enabling is σ-mode-independent, making it SMT-checkable). The system-scope specialization is BPO:0050; per-account and per-token specializations specialize to σ = {account} and σ = {token}."
+  },
+  "formalization": {
+    "signature": "Scope σ drawn from the access-control configuration (system, account, token, asset-class); mode(σ, s) ∈ {active, paused}; pausedAt(σ, s) : timestamp; maxPause(σ) : const ; valueMoving ⊆ Op; effects(o) : Op → 2^Scope ; recovery(σ) ⊆ Op.",
+    "first_order_logic": "Scope pause safety:  ∀ s, s', o, σ . ( mode(σ, s) = paused ∧ o ∈ valueMoving ∧ σ ∈ effects(o) ∧ o ∉ recovery(σ) ∧ s --[o]--> s' ) → False.\nCoverage:  ∀ σ, o ∈ valueMoving . σ ∈ effects(o) → gatedBy(o, whenScopeNotPaused(σ)).\nBounded sojourn at σ:  ∀ s, σ . mode(σ, s) = paused → ◇_{≤ maxPause(σ)} ( mode(σ, ·) = active ∨ exitAvailable(σ) ).\nExit preservation at σ:  ∀ s, σ, p . entitledWithdrawal(p, σ, s) → enabled(forcedExit(p, σ), s) (σ-mode-independent).",
+    "temporal_logic": {
+      "ltl": "G( ∀σ . paused(σ) → ¬anyValueMoveTouching(σ) )   ∧   G( ∀σ . paused(σ) → F_{bounded(σ)} ( active(σ) ∨ exitTaken(σ) ) )",
+      "ctl": "AG( ∀σ . paused(σ) → AF active(σ) )   under the timelock or always-on-escape assumption",
+      "fairness": "REQUIRED for the timelock variant: weak fairness on block-clock progress (BPO:0080). NOT required for the structural-escape variant (the recovery edge is unconditionally enabled in σ's paused mode)."
+    },
+    "hoare": [
+      { "pre": "mode(σ) = paused ∧ o ∈ valueMoving ∧ σ ∈ effects(o) ∧ o ∉ recovery(σ)", "command": "o(...)", "post": "revert" },
+      { "pre": "entitledWithdrawal(p, σ)", "command": "forcedExit(p, σ)", "post": "funds returned to p regardless of mode(σ)" }
+    ],
+    "state_machine": "Per-scope two-mode automaton; pause(σ) / unpause(σ) are σ-admin-gated edges; auto-unpause(σ) fires when the σ-clock guard holds; a forced-exit(σ) edge is enabled in both modes for entitled holders at σ. The property is the conjunction, over every scope σ in scope of the policy, of (no value-move edge whose effect-set intersects σ is enabled from σ-paused) and (σ-paused is not absorbing for entitled exits at σ).",
+    "type_theoretic": "The pause capability at σ is a bounded, possibly time-limited, scope-typed capability (an affine resource with a scope tag and an expiry), distinct from an unbounded admin capability. Specializes naturally to σ = system (BPO:0050), σ = account (C30-S instance), σ = token (C31-S instance)."
+  },
+  "relationships": [
+    { "type": "composesWith", "target": "BPO:0050", "note": "System-scope sibling: BPO:0050 is the σ = system specialization; BPO:0051 carries the same safety/liveness structure parameterized over arbitrary scopes." },
+    { "type": "conflictsWith", "target": "BPO:0002", "note": "An UNBOUNDED scope-pause negates eventual-withdrawal for parties within σ — the same tension BPO:0050 hosts at system scope. This bounded form is the designed resolution at scope σ." },
+    { "type": "composesWith", "target": "BPO:0082", "note": "An L2-style structural escape can realize the exit-preservation clause at the relevant σ." },
+    { "type": "dependsOn", "target": "BPO:0040", "note": "Pause/unpause authority at σ is governed by access-control correctness." },
+    { "type": "mitigates", "target": "ATK:scoped-indefinite-freeze" },
+    { "type": "mitigates", "target": "ATK:scope-pause-coverage-gap" },
+    { "type": "mitigates", "target": "ATK:compliance-freeze-without-exit" }
+  ],
+  "attack_surface": [
+    { "class": "scope-indefinite-pause", "pattern": "per-account or per-token pause with neither time bound nor exit; equivalent to scoped seizure of funds", "incident_refs": [], "notes": "The whole reason this property is specified as bounded at every σ." },
+    { "class": "scope-coverage-gap", "pattern": "a value-moving path whose effect intersects σ is not σ-gated; pause is ineffective and the exploit continues against σ", "incident_refs": [], "notes": "Coverage obligation: enumerate, per σ, every value-moving selector whose effects intersect σ and gate each." },
+    { "class": "scope-pause-key-compromise", "pattern": "a single per-scope guardian key freezes σ maliciously", "incident_refs": [], "notes": "Multisig / timelock the scope-pause authority; keep unpause less privileged or auto-timed." },
+    { "class": "recovery-edge-suppression", "pattern": "the forced-exit edge for σ is itself disabled by the σ-pause, defeating the exit clause", "incident_refs": [], "notes": "The recovery edge must be σ-mode-INDEPENDENT by construction." }
+  ],
+  "observability": {
+    "events": ["ScopePaused(σ, by, at)", "ScopeUnpaused(σ, by, at)", "ScopeForcedExit(p, σ)"],
+    "metrics": ["pause duration per σ vs maxPause(σ)", "fraction of value-moving selectors gated per σ"],
+    "invariant_checkpoints": ["all value-moving selectors whose effects intersect σ carry whenScopeNotPaused(σ)", "forcedExit(p, σ) reachable in σ-paused mode for entitled p"],
+    "runtime_assertions": ["assert(block.timestamp < pausedAt(σ) + maxPause(σ)) else auto-unpause(σ)", "assert(σ-paused ⇒ forcedExit(σ) still enabled)"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Per-scope coverage + halt safety", "tools": ["Slither (modifier coverage)", "Certora", "Halmos"], "strength": "proof", "notes": "Prove, for each σ the system supports, that every value-moving method whose effect-set intersects σ is σ-gated and reverts when σ is paused." },
+      { "approach": "Bounded-liveness model checking per scope", "tools": ["TLA+/TLC", "ProB"], "strength": "bounded-proof", "notes": "Check that σ-paused is not absorbing for entitled exits at σ under the clock/escape assumption, for each scope in the policy." }
+    ],
+    "testability": ["all σ-intersecting value-moving calls revert when σ is paused", "forcedExit(σ) succeeds while σ is paused", "auto-unpause(σ) fires after maxPause(σ)"]
+  },
+  "enforcement": {
+    "runtime": ["whenScopeNotPaused(σ) on every value-moving path whose effect-set intersects σ", "timelocked auto-unpause per σ", "always-enabled forcedExit(σ) for entitled withdrawals at σ"],
+    "static": ["coverage check: no σ-intersecting value-moving selector is σ-ungated", "scope-effect analysis on every selector"],
+    "design_patterns": ["bounded per-scope circuit breaker", "separate (lower) authority for σ-unpause vs σ-pause", "scope-typed pause capability (affine + expiry)"]
+  },
+  "assumptions": [
+    { "kind": "synchrony", "statement": "Block clock advances so per-scope auto-unpause guards can fire (only for the timelock variant).", "discharged_by": "BPO:0080" },
+    { "kind": "trust", "statement": "Per-scope pause authority is not unilaterally controlled by a single untrusted key.", "discharged_by": "BPO:0040" },
+    { "kind": "environmental", "statement": "The effect-set effects(o) of every value-moving operation is precisely modelled, so per-scope coverage is decidable.", "discharged_by": null }
+  ],
+  "provenance": {
+    "authors": ["BPO seed"],
+    "created": "2026-05-21",
+    "confidence": "draft",
+    "sources": ["circuit-breaker patterns at per-account and per-token granularity", "compliance-freeze design literature", "BPO:0050 system-scope antecedent"],
+    "notes": "Authored as the scope-parameterized companion to BPO:0050. The DASCP C30-S (account) and C31-S (token) controls are addressed by instantiating σ = account and σ = token respectively; the per-link notes flag the same strengthening pattern BPO:0050 records for C29-S (bounded + exit go beyond the bare DASCP capability text)."
+  }
+}

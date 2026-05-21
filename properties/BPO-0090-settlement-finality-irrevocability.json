@@ -1,0 +1,94 @@
+{
+  "id": "BPO:0090",
+  "slug": "settlement-finality-irrevocability",
+  "title": "Settlement Finality and Irrevocability (Forever-Final Invariant under Public Verifiability)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["irrevocable settlement", "finalized-prefix monotonicity for settled txs", "settlement persistence", "no-rollback-after-finalization"],
+    "academic_terms": ["finality predicate persistence", "consensus-finality-rooted irrevocability", "monotone settled-set invariant"],
+    "industry_terms": ["final settlement", "DvP finality", "post-trade finality", "settlement immutability"],
+    "external_refs": {
+      "dascp": [
+        { "id": "C48-N", "relation": "partially-supports", "note": "Formalizes the finality-as-invariant core of C48-N (verifiable that a finalized leg stays final); the cross-network synchronized-timestamp aspect of C48-N is addressed by BPO:0102, not by this property." }
+      ]
+    }
+  },
+  "classification": {
+    "modal_class": ["safety"],
+    "deontic_role": ["invariant", "guarantee", "temporal-commitment"],
+    "domains": ["settlement", "finality", "consensus"],
+    "abstraction_levels": ["protocol", "contract", "systemic"],
+    "verification_modalities": ["model-checking", "smt", "interactive-theorem-proving", "runtime-verification"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "Once a settlement instruction is committed to a finalized prefix of the ledger — i.e. marked final by the protocol's finality gadget — no subsequent reachable state can reverse the settlement, alter its accounted outcome, or delete the record of its occurrence; and that finality is publicly verifiable from the finalized state alone (a finality proof or certificate is exhibitable to a verifier who trusts only the protocol's finality assumptions).",
+    "system_theoretic": "A persistence invariant on the transition system: the predicate `final(t, s)` is monotone in s — once true at a reachable state, true at every reachable successor. Settlement state under final(t) is frozen: no transition labelled with a reversal, undo, or alteration of t is enabled from any state in which final(t) holds.",
+    "security": "The post-trade backbone. Without irrevocability, every downstream claim — solvency, ownership, custody, asset-servicing entitlement — is conditional on the ledger not changing its mind. Failure modes — a reorg that erases a finalized block, a finality-gadget bug that admits competing finalized prefixes, a contract-level revert path that undoes a logically settled transfer — destroy all reduction of risk that 'final' was meant to deliver. The property is the negation of those failure modes.",
+    "execution_semantics": "Realized at two layers. (1) Protocol-level finality: the consensus protocol's finality gadget marks blocks as finalized after the configured procedure (e.g. justification + finalization in Casper FFG, ⅔ vote in a BFT round, sufficient-depth confirmation under a longest-chain rule with finality bound). (2) Contract-level: a settlement record is only marked final once it has been included in a finalized block AND its on-chain settled-flag has been set; no contract path may clear that flag. Violations live in: protocol-level finality bugs (BPO:0080 territory), contract-level paths that revert the settled-flag, and proof-verification bugs that accept a forged finality certificate.",
+    "formal_verification": "A 1-safety persistence invariant: `∀ s reachable, t . final(t, s) → ∀ s' reachable from s . final(t, s') ∧ accountedOutcome(t, s') = accountedOutcome(t, s)`. Provable by induction over the transition relation: show every transition preserves final(t) and accountedOutcome(t) for any t with final(t) already true. Decidable for a fixed contract; the consensus-level half (no protocol reorg past finality) is delegated to BPO:0080; the proof-of-finality verification half (when finality is evidenced by a ZK or signature-based certificate) is delegated to BPO:0070 / BPO:0074."
+  },
+  "formalization": {
+    "signature": "Settlement records t : SettlementID; predicate final : SettlementID × State → Bool; accountedOutcome : SettlementID × State → Outcome (a record of debits, credits, ownership changes); transitions s --[o]--> s'; finalityCert : SettlementID → Cert; verifyCert : Cert → Bool.",
+    "first_order_logic": "Persistence:  ∀ s reachable, s' reachable from s, t . final(t, s) → final(t, s') ∧ accountedOutcome(t, s') = accountedOutcome(t, s).\nPublic verifiability:  ∀ s, t . final(t, s) → ∃ c . verifyCert(c) = 1 ∧ c attests final(t).\nNo-bypass:  no transition has effect that contradicts a final settlement's accountedOutcome.",
+    "temporal_logic": {
+      "ltl": "G( final(t) → G final(t) )   ∧   G( final(t) → G ¬reverted(t) )   ∧   G( final(t) → ∃ verifiable cert )",
+      "ctl": "AG( final(t) → AG final(t) )",
+      "fairness": "None required for the persistence half. The composing 'is eventually final' liveness claim does require consensus liveness fairness (BPO:0080) but lives in that property, not here."
+    },
+    "hoare": [
+      { "pre": "final(t, s)", "command": "any operation o", "post": "final(t, s') ∧ accountedOutcome(t, s') = accountedOutcome(t, s)" },
+      { "pre": "verifyCert(c) = 1 ∧ c attests final(t)", "command": "verifier accepts c", "post": "outside verifier concludes final(t) under the consensus and crypto assumptions" }
+    ],
+    "state_machine": "Per-settlement two-color state: PENDING → FINAL. The FINAL color is absorbing: no transition exits it, and no transition changes the accountedOutcome while in FINAL. The state-transition diagram has no edge from FINAL back to PENDING (or to a competing FINAL with a different outcome).",
+    "type_theoretic": "Finality as a non-revocable witness — once issued, it cannot be retracted (an affine-but-persistent token). A settlement reversal would require consuming the finality witness, which is structurally impossible. Provides the type-level discipline behind the runtime invariant."
+  },
+  "relationships": [
+    { "type": "dependsOn", "target": "BPO:0080", "note": "Protocol-level finality (no reorg past finalization, no competing finalized prefixes) is the consensus property this rests on; here we lift it to a per-settlement invariant." },
+    { "type": "dependsOn", "target": "BPO:0070", "note": "For settlements whose finality is evidenced by a ZK validity proof, knowledge-soundness is the precondition for the verifier accepting the certificate as proof of finality." },
+    { "type": "dependsOn", "target": "BPO:0074", "note": "For settlements whose finality is evidenced by a committee/multisig certificate, signature unforgeability is the precondition for accepting the certificate." },
+    { "type": "composesWith", "target": "BPO:0093", "note": "An encumbrance released ON settlement (BPO:0093) is consistent with this property: once final, the encumbrance disposition is itself final." },
+    { "type": "composesWith", "target": "BPO:0101", "note": "Conservation-of-value must hold across the PENDING → FINAL transition; once final, accountedOutcome is the fixed component of the value measure for that settlement." },
+    { "type": "mitigates", "target": "ATK:settlement-reversal" },
+    { "type": "mitigates", "target": "ATK:reorg-mediated-double-spend" },
+    { "type": "mitigates", "target": "ATK:finality-certificate-forgery" }
+  ],
+  "attack_surface": [
+    { "class": "protocol-reorg-past-finality", "pattern": "consensus protocol bug or > threshold adversary causes a finalized block to be replaced", "incident_refs": [], "notes": "Out-of-scope for the contract layer; delegated to BPO:0080. Marked here so the cross-layer dependency is visible." },
+    { "class": "contract-level-revert-path", "pattern": "an admin or recovery path can clear the settled-flag for a record marked final, undoing the contract-side finality", "incident_refs": [], "notes": "Enumerate every write path to the settled-flag and ensure none is enabled while final(t) holds." },
+    { "class": "finality-certificate-forgery", "pattern": "the verifier accepts a forged finality certificate (under-constrained ZK proof, accepted signature with replay, committee-rotation race)", "incident_refs": [], "notes": "Composes with BPO:0070 (ZK soundness) and BPO:0074 (signature hardness); the verifier wiring is the on-chain side." },
+    { "class": "finality-attribution-drift", "pattern": "the contract-level settled-flag is set BEFORE the protocol-level finalization is achieved (premature finalization), so a benign protocol reorg invalidates the contract claim", "incident_refs": [], "notes": "Tie the on-chain settled-flag to evidence of protocol-level finality, not to inclusion alone." }
+  ],
+  "observability": {
+    "events": ["SettlementFinalized(t, cert)", "FinalityProofVerified(t, c)"],
+    "metrics": ["count of FINAL→non-FINAL transitions (target: 0)", "elapsed time PENDING → FINAL per settlement vs the protocol's expected bound"],
+    "invariant_checkpoints": ["no transition takes a FINAL record back to PENDING", "no transition alters accountedOutcome(t) while final(t)", "every FINAL record is accompanied by a verifiable certificate"],
+    "runtime_assertions": ["assert(!(was_final(t) && !final(t)))", "assert(verifyCert(c) for every published finalization)"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Persistence invariant via induction", "tools": ["Certora Prover", "Halmos", "KEVM / hevm", "Coq / Isabelle for protocol layer"], "strength": "proof", "notes": "Prove final(t) is preserved by every transition; prove accountedOutcome(t) is preserved while final(t). Contract-layer is SMT-tractable; protocol-layer needs ITP or model-checking against the finality gadget." },
+      { "approach": "Certificate-verifier soundness", "tools": ["Certora for the on-chain verifier", "EasyCrypt for the crypto reduction"], "strength": "bounded-proof", "notes": "Prove the on-chain verifier accepts only certificates that genuinely evidence protocol-level finality." },
+      { "approach": "Runtime monitor for finality drift", "tools": ["block monitor + alerting"], "strength": "high-coverage-evidence", "notes": "Off-chain watcher alerts on FINAL → non-FINAL appearance and on premature finalization (contract flag set before protocol finalization)." }
+    ],
+    "testability": ["no test sequence produces a FINAL→PENDING transition", "forged finality certificate rejected by verifier", "accountedOutcome unchanged by any post-finalization operation"]
+  },
+  "enforcement": {
+    "runtime": ["settled-flag is set-once with no clear path", "verifyCert required for every finalization event", "finalization tied to evidence of protocol-level finality, not block inclusion alone"],
+    "static": ["enumerate every storage path that writes the settled-flag; gate each with !final(t) AND authorized-finalizer", "no upgrade can introduce a settled-flag-clearing path"],
+    "design_patterns": ["set-once finality flag with immutable accountedOutcome record", "finality certificate stored alongside the settlement record for re-verification", "two-stage commit: inclusion-then-finality"]
+  },
+  "assumptions": [
+    { "kind": "synchrony", "statement": "Consensus reaches finality under the protocol's stated fault and timing assumptions.", "discharged_by": "BPO:0080" },
+    { "kind": "cryptographic", "statement": "Finality certificates (ZK validity proofs or signed committee attestations) are sound; forging an accepting certificate requires breaking the underlying scheme.", "discharged_by": "BPO:0070" },
+    { "kind": "environmental", "statement": "No protocol-level reorg primitive exists that bypasses the finality gadget; the consensus protocol's finalized prefix is the boundary at which this property bottoms out. Mechanical verification stops here and protocol-design assurance takes over.", "discharged_by": null }
+  ],
+  "provenance": {
+    "authors": ["BPO seed"],
+    "created": "2026-05-21",
+    "confidence": "draft",
+    "sources": ["BIS/IOSCO Principles for Financial Market Infrastructures (Settlement Finality)", "Casper FFG, Tendermint, HotStuff finality gadgets", "GFMA settlement-finality guidance"],
+    "notes": "Authored as the formal version of DASCP C48-N's behavioural core (and the underlying R2 risk). The cross-network timestamp-synchronization clause of C48-N is intentionally NOT covered here — that obligation belongs to BPO:0102. The third assumption (no reorg primitive beyond the finality gadget) is the load-bearing accepted-undischarged ledger entry: it names the boundary at which the property bottoms out."
+  }
+}

@@ -1,0 +1,95 @@
+{
+  "id": "BPO:0041",
+  "slug": "multiparty-transaction-validation",
+  "title": "Multiparty Transaction Validation (k-of-n Authorization Threshold)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["k-of-n approval", "threshold authorization", "multisig validity", "collaborative validation"],
+    "academic_terms": ["threshold access policy", "distinct-signer quorum scheme", "k-of-n predicate guard"],
+    "industry_terms": ["multisig wallet", "approval committee", "multi-party transaction approval"],
+    "external_refs": {
+      "cwe": ["CWE-284 Improper Access Control", "CWE-862 Missing Authorization"],
+      "dasp": ["DASP-2 Access Control"],
+      "dascp": [
+        { "id": "C16-S", "relation": "partially-supports", "note": "Formalizes the behavioural k-of-n approval core of C16-S; the 'periodic updates to address emerging security challenges' clause is operational and stays out of BPO scope." }
+      ]
+    }
+  },
+  "classification": {
+    "modal_class": ["safety"],
+    "deontic_role": ["invariant", "guarantee", "policy"],
+    "domains": ["access-control", "governance", "contract", "settlement"],
+    "abstraction_levels": ["contract", "protocol"],
+    "verification_modalities": ["smt", "symbolic-execution", "model-checking", "runtime-verification", "static-dataflow"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "Every privileged transaction in scope of the multiparty-validation policy takes effect only if it carries valid approvals from at least k of n authorized validators (with k and n defined by the policy in force when the transaction is processed). Each approval is a distinct, authenticated act by a distinct identity. The validator set V and the threshold k are themselves elements of the access-control state and change only via authorized governance operations.",
+    "system_theoretic": "A threshold-guard constraint on the labelled transition system: a transition labelled with a privileged operation o is enabled only when the accompanying approval multiset contains ≥ k entries each verifying under a distinct identity in the current validator set V; n = |V| at execution time. The threshold predicate is the dynamic residue of a static k-of-n access-control matrix; the configuration (V, k) is itself an invariant whose only legal mutations are authorized governance transitions.",
+    "security": "The collusion bound. A k-of-n policy converts unilateral compromise of a single validator into a non-event: an attacker must compromise k distinct validators to forge an approval set. Failure modes — counting the same signer twice, accepting expired/rotated keys, replaying an approval set across contexts, or letting the threshold itself be reset by an unprivileged action — defeat this bound; the property is the negation of those failure modes.",
+    "execution_semantics": "Realized by collecting EIP-712-typed signed approvals (each binding chain-id, contract, nonce, and operation digest), counting unique authorized signers, comparing against the threshold, and gating the privileged effect on the comparison. Violations live in: missing duplicate detection (two encodings of one signer counted twice), stale-set drift (signer was authorized at signing time but rotated out by execution time, or vice versa), missing domain separation (cross-chain or cross-contract replay), and write paths to V or k that are not themselves governance-gated.",
+    "formal_verification": "A 1-safety property: parametric rule over every privileged method asserting that, on the success path, |{ distinct authorized signers in the approval set }| ≥ k holds against the current (V, k); and that mutations of (V, k) are only by authorized governance operations. The signature-soundness side is delegated to BPO:0074; the access-control of the governance layer is delegated to BPO:0040; this property is the threshold logic that sits above both."
+  },
+  "formalization": {
+    "signature": "Validators V(s) ⊆ Addr; threshold k(s) ∈ ℕ with k(s) ≤ |V(s)| = n(s); approval set A ⊆ Sig; sig: Addr × Msg → Sig (verified signature); privileged ⊆ Op; canonical signer identity id: Sig → Addr.",
+    "first_order_logic": "Threshold guard:  ∀ s, s', o, A . ( s --[o, A]--> s' ∧ o ∈ privileged ) → |{ id(σ) : σ ∈ A ∧ id(σ) ∈ V(s) ∧ sig.verify(id(σ), msg(o,s), σ) }| ≥ k(s).\nDistinct counting:  the set above is over CANONICAL signer identity, so multiplicity of any one signer in A contributes at most 1.\nConfiguration integrity:  ∀ s, s', t . ( V(s') ≠ V(s) ∨ k(s') ≠ k(s) ) ∧ s --[t]--> s' → authorizedGovernance(t).",
+    "temporal_logic": {
+      "ltl": "G( privilegedEffect(o) → |distinct_authorized_signers(A)| ≥ k )   ∧   G( change(V) ∨ change(k) → authorizedGovernance )",
+      "fairness": "None required (pure safety)."
+    },
+    "hoare": [
+      { "pre": "o ∈ privileged ∧ |distinct_authorized_signers(A) ∩ V| < k", "command": "o(... A ...)", "post": "revert ∧ state unchanged" },
+      { "pre": "authorizedGovernance(sender) ∧ valid(V', k')", "command": "updateValidators(V', k')", "post": "V = V' ∧ k = k'" }
+    ],
+    "state_machine": "Two-layer automaton: (1) the protected-operation layer, each privileged edge gated by the threshold check against the current (V, k); (2) the governance layer, with edges that mutate V or k themselves gated by their own access-control. The property is that the protected layer's guards never accept an under-threshold approval set AND the governance layer mediates every change to (V, k).",
+    "type_theoretic": "Approval as an affine (consumable, non-duplicable) witness keyed by (validator identity, operation digest); a privileged call is well-typed only when supplied a multiset of distinct approval witnesses of cardinality ≥ k from the current validator set. Distinct-signer counting becomes a static typing constraint rather than a fragile runtime nominal check.",
+    "algebraic": "Approval multisets under (∪, ∅) form a commutative monoid; the threshold predicate is monotone in approval-set inclusion. (V, k) together form the access-control configuration, modified only by sanctioned governance transitions."
+  },
+  "relationships": [
+    { "type": "composesWith", "target": "BPO:0040", "note": "Threshold validation rests on the broader access-control correctness framework — sound role-admin DAG, monotone delegation, effective revocation — that governs V and k." },
+    { "type": "dependsOn", "target": "BPO:0074", "note": "Approval signatures must be existentially unforgeable; the cryptographic hardness is discharged here." },
+    { "type": "composesWith", "target": "BPO:0001", "note": "A multiparty-validated mint path satisfies both the supply-monotonicity invariant (BPO:0001) and the k-of-n approval invariant (this property) simultaneously." },
+    { "type": "mitigates", "target": "ATK:single-key-compromise" },
+    { "type": "mitigates", "target": "ATK:approval-set-counting-bypass" },
+    { "type": "mitigates", "target": "ATK:cross-context-signature-replay" },
+    { "type": "mitigates", "target": "ATK:unauthorized-admin-action" }
+  ],
+  "attack_surface": [
+    { "class": "duplicate-signer-credit", "pattern": "the same signer's signature counted twice or more toward the threshold (e.g. via two distinct encodings, or two pubkey representations of the same identity)", "incident_refs": [], "notes": "Distinct-signer counting must be over canonical signer identity, not over message-or-signature-bytes uniqueness." },
+    { "class": "stale-validator-set", "pattern": "approval signed when the signer was in V, executed after rotation removed them; or vice-versa", "incident_refs": [], "notes": "Validate against V at execution time, or pin the relevant V via an approved-set commitment included in the signed message." },
+    { "class": "cross-context-replay", "pattern": "approval set valid for one transaction, contract, or chain replayed against another; missing nonce / chain-id / contract address in the signed payload", "incident_refs": [], "notes": "EIP-712 domain separation including chain-id, verifyingContract, and a strictly-monotone nonce." },
+    { "class": "threshold-reset-by-unprivileged", "pattern": "k or V reachable by a non-governance path (a forgotten setter, an unprotected initializer, a delegatecall write), defeating the guard out-of-band", "incident_refs": [], "notes": "Enumerate every write path to k and V; require all to be authorized-governance per BPO:0040." }
+  ],
+  "observability": {
+    "events": ["ApprovalCollected(o, signer)", "PrivilegedEffect(o, distinctApprovers)", "ValidatorSetUpdated(V, k)"],
+    "metrics": ["count(distinct authorized approvers) per privileged execution — must be ≥ k", "frequency of (V, k) changes (anomaly detection)"],
+    "invariant_checkpoints": ["pre-effect: |distinct_authorized_signers(A) ∩ V| ≥ k", "post-effect: (V, k) unchanged unless the executed tx is a sanctioned governance update"],
+    "runtime_assertions": ["assert(verified_distinct_signers.length >= threshold)", "assert(every counted signer ∈ V at execution block)"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Parametric threshold rule", "tools": ["Certora Prover", "Halmos"], "strength": "proof", "notes": "Prove every privileged method's success path implies the threshold check holds against the current (V, k); prove (V, k) writes are themselves governance-gated." },
+      { "approach": "Symbolic execution of the verifier", "tools": ["Halmos", "Mythril", "hevm"], "strength": "bounded-proof", "notes": "Explore symbolic approval sets; confirm the threshold check is non-bypassable across all reachable selectors and bytecode paths." },
+      { "approach": "Static distinct-signer accounting", "tools": ["Slither", "custom checkers"], "strength": "high-coverage-evidence", "notes": "Verify canonical-identity comparison in the signer-counting loop and reject patterns that count bytes-uniqueness in place of identity-uniqueness." }
+    ],
+    "testability": ["k-1 valid signatures revert; k succeed", "duplicate signer counted exactly once", "approval set containing a non-V signer reverts", "approval replayed against a different tx-hash, chain-id, or contract reverts"]
+  },
+  "enforcement": {
+    "runtime": ["EIP-712 domain-separated approval messages with nonces", "canonical distinct-signer counting", "validator-set membership check at execution block"],
+    "static": ["typed approval witnesses (capability discipline)", "linter rule: every privileged selector carries the threshold-check guard"],
+    "design_patterns": ["batched approval verification before any state change", "V commitment included in the signed message", "two-step (V, k) update with a cooldown timelock"]
+  },
+  "assumptions": [
+    { "kind": "cryptographic", "statement": "Approval signatures are existentially unforgeable at the deployed security parameter.", "discharged_by": "BPO:0074" },
+    { "kind": "trust", "statement": "The validator set V and threshold k are themselves access-controlled; mutations occur only via the sanctioned governance path.", "discharged_by": "BPO:0040" },
+    { "kind": "environmental", "statement": "Approval messages carry sufficient domain separation (chain-id, contract address, nonce) so they are not replayable across chains, contracts, or operations.", "discharged_by": null }
+  ],
+  "provenance": {
+    "authors": ["BPO seed"],
+    "created": "2026-05-21",
+    "confidence": "draft",
+    "sources": ["threshold-signature literature", "EIP-712 typed-data signing (Ethereum)", "multisig wallet practice"],
+    "notes": "Authored to formalize the behavioural core of DASCP C16-S. The control's operational 'periodic updates' aspect is process and remains out of BPO scope."
+  }
+}

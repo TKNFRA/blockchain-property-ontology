@@ -1,0 +1,97 @@
+{
+  "id": "BPO:0075",
+  "slug": "private-data-confidentiality-hyperproperty",
+  "title": "Private-Data Confidentiality at Network-Observer Scope (Non-Interference Hyperproperty)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["network-level confidentiality", "public-state non-interference", "secret-data privacy under public observability", "declassification-bounded confidentiality"],
+    "academic_terms": ["non-interference (declassification-bounded)", "2-safety hyperproperty", "Goguen-Meseguer non-interference", "indistinguishability under chosen-public-input"],
+    "industry_terms": ["on-chain data privacy", "encrypted state confidentiality", "public-observer model"],
+    "external_refs": {
+      "cwe": ["CWE-200 Exposure of Sensitive Information to an Unauthorized Actor", "CWE-668 Exposure of Resource to Wrong Sphere"],
+      "dascp": [
+        { "id": "C40-R", "relation": "partially-supports", "note": "Formalizes the confidentiality-against-public-observer hyperproperty that C40-R aspirationally requires; the data-life-cycle aspects of C40-R (collection, retention, deletion procedures) are operational and stay out of BPO scope." },
+        { "id": "C41-R", "relation": "partially-supports", "note": "Provides the formal indistinguishability content C41-R points at; the identifier-level pseudonymization PROCESS (key custody, re-identification workflows) stays out of scope." }
+      ]
+    }
+  },
+  "classification": {
+    "modal_class": ["hypersafety", "non-interference"],
+    "deontic_role": ["guarantee"],
+    "domains": ["privacy", "data", "network", "application"],
+    "abstraction_levels": ["protocol", "cryptographic", "systemic"],
+    "verification_modalities": ["bounded-model-checking", "type-checking", "interactive-theorem-proving", "cryptographic-proof"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "An adversary with read-access to the network's public surface — block contents, emitted events, exposed storage slots, contract call returns — cannot distinguish between two valid system histories that agree on declared declassified outputs and on access-policy decisions but differ on any secret-classified data. Equivalently: the projection of an execution onto the public-observer view is a function of the declassified-public information only; the secret-classified data has no causal effect on what an outside observer sees, beyond what the system intentionally declassifies.",
+    "system_theoretic": "A relation between TWO executions of the same system that agree on public (Low) inputs, declassification predicates, and access-policy decisions, and differ only on secret (High) inputs. The property asserts the Low-projected traces coincide. This is a relational / 2-safety constraint over the trace-set semantics — not a property of any single execution — and so a hyperproperty in the Clarkson–Schneider sense.",
+    "security": "The cryptographic-and-systemic backbone of any privacy-preserving deployment: encrypted state, blinded commitments, mixed pools, off-chain compute with on-chain commitments. Failure is leakage through a side channel the engineer did not model — an exposed event, a public storage variable, a verifier callback whose timing or revert message is High-input-dependent, an oracle whose return value is High-input-correlated. Single-trace tools cannot detect such leaks even in principle.",
+    "execution_semantics": "Realized by partitioning inputs and outputs (and intermediate signals that escape via events/logs/calls) into High and Low labels under an information-flow policy with explicit declassification points (typically: 'the access-policy decision is Low'; 'the encrypted ciphertext is Low because hiding is delegated to the encryption layer'). Violations live in: implicit declassification through gas-cost differences, revert-reason content, event emission conditional on High, oracle inputs derived from High, or storage slots written conditional on High that are publicly readable.",
+    "formal_verification": "A 2-safety property. Verified by self-composition (instantiate the system twice with two High assignments agreeing on Low; assert Low-projections coincide) reduced to a safety check on the doubled system; by information-flow typing of the codebase (a well-typed program admits no High → Low flow except through declared declassification); by interactive theorem proving for the joint argument; and by cryptographic reduction for the encryption layer (e.g. IND-CPA hiding of ciphertexts at the Low boundary). It is a category error to claim this property on the basis of a single-trace tool: SMT on reachable states, single-execution symbolic execution, and single-run fuzzing CANNOT establish a hyperproperty, no matter how exhaustive."
+  },
+  "formalization": {
+    "signature": "States S; transitions s --[a]--> s'; input partition I = I_Low ⊎ I_High; declassification predicate Δ : I_Low × I_High → Out_declassified; public-observer projection π_pub : Trace → ObsTrace (events, public storage, call returns, public timing); access-policy function ρ : I → Decision.",
+    "first_order_logic": "Non-interference (declassification-bounded):  ∀ trace t1, t2 generated by the system from input pairs (i_L, i_H1), (i_L, i_H2) with i_L identical, Δ(i_L, i_H1) = Δ(i_L, i_H2), and ρ(i_L, i_H1) = ρ(i_L, i_H2)  →  π_pub(t1) = π_pub(t2).",
+    "temporal_logic": {
+      "ltl": "n/a — non-interference is relational and is NOT expressible by an LTL formula over single traces.",
+      "fairness": "n/a (hypersafety)."
+    },
+    "hoare": [],
+    "state_machine": "Self-composed system S × S sharing i_L, ρ-output, and Δ-output; assert equality of π_pub projections across the two High assignments. The standard reduction of a 2-safety hyperproperty to a 1-safety property on the doubled system, suitable for ordinary safety checkers — but only when applied to the COMPOSED system, never the original.",
+    "type_theoretic": "Information-flow typing: every variable, parameter, return, event field, storage slot, and external-call argument is labelled High or Low; the typing judgment forbids any flow from High to Low except through an annotated declassify(Δ) or declassify(ρ) operation. A well-typed program in this discipline satisfies the property by construction; verification reduces to type-checking plus an audit of the declassification points.",
+    "algebraic": "The set of admissible behaviours is the equivalence class of public traces under the relation 'agrees on (i_L, Δ, ρ)'; the property asserts the equivalence class is a singleton at the public-observer projection.",
+    "hyperproperty": "A 2-execution declassification-bounded non-interference property in the hypersafety class; reduced to safety by self-composition. Single-trace tools (SMT on individual reachable states, fuzzing, single-path symbolic execution) cannot establish this property."
+  },
+  "relationships": [
+    { "type": "refines", "target": "BPO:0003", "note": "Extends simulator-based ZK witness privacy from the proof-system boundary to the network-observer surface: the same indistinguishability discipline applied to public state, events, and calls rather than only to proof transcripts." },
+    { "type": "composesWith", "target": "BPO:0073", "note": "Circuit-level non-leakage (BPO:0073) composes with this system-level non-interference: a system whose circuits do not leak through public signals AND whose public surface beyond circuits does not leak through events/storage satisfies both." },
+    { "type": "dependsOn", "target": "BPO:0074", "note": "Hiding properties of the encryption / commitment scheme used to render High values Low-observable (as ciphertexts) reduce to cryptographic hardness assumptions." },
+    { "type": "conflictsWith", "target": "BPO:0072", "note": "Full public auditability and full network-level confidentiality on the same data are in direct tension; selective disclosure (commitment + ZK proof of conformance) is the standard reconciliation, the same pattern BPO:0003 records against BPO:0072." },
+    { "type": "mitigates", "target": "ATK:public-state-deanonymization" },
+    { "type": "mitigates", "target": "ATK:event-emission-side-channel" },
+    { "type": "mitigates", "target": "ATK:gas-timing-side-channel" },
+    { "type": "mitigates", "target": "ATK:storage-correlation-leak" }
+  ],
+  "attack_surface": [
+    { "class": "event-emission-side-channel", "pattern": "an event is emitted only when a High-input-dependent predicate holds (e.g. only when a balance is non-zero, only when a flag is set); the public observer learns the predicate value", "incident_refs": [], "notes": "Either emit unconditionally with constant payload, emit a commitment + ZK proof, or do not emit." },
+    { "class": "storage-correlation-leak", "pattern": "a publicly readable storage slot is written conditional on a High value, or its post-state correlates with the High value (e.g. an incremented counter), so the observer reads off the High input", "incident_refs": [], "notes": "Mask or commit; ensure post-state write pattern is independent of the High data flow." },
+    { "class": "gas-timing-side-channel", "pattern": "gas consumption or call timing differs measurably across two equally-public traces because internal branching depends on High inputs", "incident_refs": [], "notes": "Constant-time / constant-gas patterns for High-touching code paths; relevant especially for L2 sequencer-observable timing." },
+    { "class": "revert-content-leak", "pattern": "the revert reason string encodes a High-input-dependent error case, leaking which High value triggered the revert", "incident_refs": [], "notes": "Use uniform revert reasons or revert-no-reason for High-input-conditioned reverts." },
+    { "class": "oracle-input-leak", "pattern": "an oracle is queried with a High-dependent query, causing the oracle observer to learn the High input via the query pattern", "incident_refs": [], "notes": "Query patterns must be either fixed or themselves commitments." },
+    { "class": "implicit-declassification", "pattern": "the policy admits more declassification than intended — e.g. ρ leaks more about i_H than the access decision requires", "incident_refs": [], "notes": "Audit Δ and ρ for minimality." }
+  ],
+  "observability": {
+    "events": ["DeclassificationApplied(point, Δ)"],
+    "metrics": ["count of High → Low flows annotated as declassify(Δ) vs unannotated (target: zero unannotated)", "self-composition counterexamples per release"],
+    "invariant_checkpoints": ["IFC type-check passes with zero unannotated High → Low flows", "self-composition assertion holds on the doubled system"],
+    "runtime_assertions": ["n/a — hyperproperties are not single-trace-observable at runtime; this property is static/relational"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Self-composition + safety checker", "tools": ["Halmos / SMT over the doubled system", "Certora self-composition templates", "relational verifiers"], "strength": "bounded-proof", "notes": "Reduce 2-safety to 1-safety on S × S; assert public-observer projection equality across the two High assignments. The reduction is sound provided the composition preserves environment behaviour." },
+      { "approach": "Information-flow typing", "tools": ["IFC-typed languages / linters", "Coq with IFC libraries", "FlowChecker-style analyzers"], "strength": "proof", "notes": "A well-typed program in the IFC discipline satisfies the property by construction; engineering cost is concentrated in annotating the declassification points and the public-observer model." },
+      { "approach": "Cryptographic reduction (encryption layer)", "tools": ["EasyCrypt", "pen-and-paper reduction"], "strength": "proof", "notes": "Reduce hiding of High data exposed as ciphertext to IND-CPA / IND-CCA of the underlying scheme; outside the reach of single-trace tools and SMT." },
+      { "approach": "Single-trace tools", "tools": ["SMT solvers on a single execution", "fuzzers", "single-path symbolic execution"], "strength": "heuristic-evidence", "notes": "CANNOT establish a hyperproperty. They may find single-trace SAFETY violations en route (e.g. a crash) but cannot rule out information leakage across pairs of traces. Listed here only to mark them as inadmissible for this property class — including this line is the discipline of the catalogue." }
+    ],
+    "testability": ["differential testing across paired High assignments with fixed (i_L, Δ, ρ): public observables coincide", "IFC type-check produces zero unannotated High → Low flows", "self-composition assertion holds for every release"]
+  },
+  "enforcement": {
+    "runtime": ["uniform revert reasons / no-reason reverts on High-conditioned paths", "constant-gas patterns for High-touching branches", "no event emission gated by a High predicate"],
+    "static": ["IFC labelling of every state variable, parameter, event field, return value, and external-call argument", "annotated declassification points reviewed for minimality", "self-composition CI gate"],
+    "design_patterns": ["commitment + ZK proof of conformance for any state otherwise High (selective disclosure)", "uniform fixed-shape transactions regardless of High inputs", "encrypted storage with separated key custody"]
+  },
+  "assumptions": [
+    { "kind": "cryptographic", "statement": "The encryption / commitment scheme used to render High values Low-observable is hiding at the deployed security parameter.", "discharged_by": "BPO:0074" },
+    { "kind": "tooling", "statement": "Information-flow labelling is sound and complete across the audited code surface; every High → Low flow that exists is either annotated declassify(Δ) or rejected by the type-checker.", "discharged_by": null },
+    { "kind": "environmental", "statement": "The Low (public-observer) model — what the adversary can read off the network — is precisely specified: which storage slots, events, call returns, gas signals, and timing signals are in-scope.", "discharged_by": null }
+  ],
+  "provenance": {
+    "authors": ["BPO seed"],
+    "created": "2026-05-21",
+    "confidence": "draft",
+    "sources": ["Goguen & Meseguer, Security policies and security models (1982)", "Clarkson & Schneider, Hyperproperties (2010)", "Barthe, D'Argenio, Rezk on self-composition for k-safety", "Sabelfeld & Myers, language-based IFC survey (2003)", "EasyCrypt for the cryptographic reduction layer"],
+    "notes": "Authored to provide the network-observer-scope hyperproperty version of confidentiality. Refines BPO:0003 (simulator-based ZK at the proof boundary) to the broader public-observer surface; composes with BPO:0073 (circuit-level non-leakage). The single most important classification call in this catalogue: this is a 2-safety hyperproperty and any verification claim must respect that — the `Single-trace tools` strategy entry exists specifically to record their inadmissibility, not to license them."
+  }
+}
