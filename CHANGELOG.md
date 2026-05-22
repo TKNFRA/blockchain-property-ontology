@@ -1,5 +1,99 @@
 # Changelog
 
+## IOF Interoperability Framework Cross-Walk — 2026-05-22
+
+Cross-walked the **Interoperability Framework for Digital Asset Securities (IOF)** — DTCC, Clearstream, Euroclear, in collaboration with BCG, February 2026 — to the BPO catalogue. The IOF organizes interoperability into 5 foundations and 29 building blocks; BPO catalogues *behavioural* properties, so the cross-walk is dense exactly where the IOF describes provable on-chain behaviour (9 blocks) and empty everywhere else (20 blocks — legal/regulatory, data-harmonization, role/governance, operational/SLA — out-of-scope by design). The validator reports `PASS` on the final corpus (24 property records unchanged in meaning; IOF framework integral and closed; bidirectional scope-link consistency green). **Not committed** — staged for maintainer review.
+
+### Design decisions recorded
+
+- **Scope verdict lives in the data, not the prose.** Each IOF building block carries a `scope` field with the enum `{behavioural, out-of-scope}` in [`mappings/iof.framework.json`](mappings/iof.framework.json). The validator enforces **bidirectional scope-link consistency** as a build-time gate: out-of-scope blocks must carry zero cross-walk links from property records, and behavioural blocks must carry at least one. Either direction's violation fails the build, so the verdict cannot drift out of sync with the actual links.
+- **Conservative relation enum on IOF cross-walks: no `establishes`.** Every IOF building block bundles policy, infrastructure, and behavioural concerns whose multi-facet character means a single BPO property can at most materially support a block, never wholly discharge it. The `external_refs.iof[].relation` enum is therefore `{supports, partially-supports}` only — tighter than the DASCP enum on purpose.
+- **Each link's note states both sides.** Every cross-walk note follows a *behavioural slice covered, X stays out-of-scope* shape so the residual is visible at the link site, not buried in the framework prose. This makes the conservatism of the link auditable per-entry.
+- **9 honest behavioural blocks beats 10 with a stretched one.** The behavioural test was applied rigorously; marginal blocks were downgraded rather than stretched. Three illustrative resolutions:
+  - **BB-message-purpose** → out-of-scope. Its behavioural intent is "adopt an ISO-20022-style standard for instructions" — already realized by BPO via the ISO 20022 binding layer; cross-walking it again at the IOF layer would double-count.
+  - **BB-time-management** → out-of-scope. Primary content (synchronised clocks, trusted time oracles, central timekeeping services) is governance/infrastructure. The one behavioural facet (no double-counting of an in-transit asset across chains) only partially aligns with BPO:0102's joint-state invariant and would need a dedicated *temporal cross-ledger consistency* property to bind cleanly — recorded as a future BPO candidate, not a stretched current link.
+  - **BB-segregation-of-duties** → out-of-scope. Its appendix content is L1/L2 architectural separation, already covered through BPO:0090 / BPO:0080 via BB-consensus-and-finality; relinking here would dual-link to the same properties without adding coverage.
+- **Inverted-emphasis coverage report.** [`mappings/IOF-coverage.md`](mappings/IOF-coverage.md) leads with the "same asset, same rights, same outcome" framing and then makes "What is deliberately not covered" the largest section — all 20 out-of-scope blocks named and categorized into legal/regulatory (7), data harmonization (7), roles/governance (4), operational/SLA (2). The majority-out-of-scope distribution is stated explicitly as the correct, expected outcome for an interoperability framework — not a coverage gap.
+- **Additive-only.** Every schema edit is a new *optional* key under an existing `additionalProperties: false` container. Every one of the 24 pre-existing property records continues to validate without edit. No `BPO:` id is reused or renumbered. No relationship-edge type is invented.
+
+### Files added (3)
+
+- **[`mappings/iof.framework.json`](mappings/iof.framework.json)** — 5 foundations (IOF:F1–F5) and 29 building blocks (`IOF:BB-…`), each carrying official title (verbatim from Exhibits 2–3 of the white paper), paraphrased description in our own words, `enablers ⊆ {data, processes, roles}`, and `scope ∈ {behavioural, out-of-scope}`. Tally: 9 behavioural / 20 out-of-scope.
+- **[`mappings/iof.framework.schema.json`](mappings/iof.framework.schema.json)** — JSON Schema fixing the file shape; id patterns `^IOF:F[0-9]+$` and `^IOF:BB-[a-z0-9]+(-[a-z0-9]+)*$`; internal-integrity checks (id uniqueness across foundations ∪ building_blocks; `building_block.foundation` closure) live in `schema/validate_refs.py`.
+- **[`mappings/IOF-coverage.md`](mappings/IOF-coverage.md)** — coverage report with inverted emphasis; small "What is covered" section (the 9 behavioural blocks with their property links and residuals) plus the largest "What is deliberately *not* covered" section (the 20 out-of-scope blocks categorized into legal/regulatory, data harmonization, roles/governance, operational/SLA), with an honest-framing closing paragraph for FMI-facing conversations.
+
+### Files modified (15)
+
+#### Schema and validator (2)
+
+- **[`schema/property.schema.json`](schema/property.schema.json)** — One additive optional field:
+  - `identifiers.external_refs.iof[]` of `{id, relation, note?}` entries; id pattern `^IOF:BB-[a-z0-9]+(-[a-z0-9]+)*$` (foundation ids deliberately not admitted — only building blocks can carry cross-walks); `relation ∈ {supports, partially-supports}` (no `establishes`).
+  - Every pre-existing record continues to validate without change.
+- **[`schema/validate_refs.py`](schema/validate_refs.py)** — Extended with:
+  - **Section 0d — IOF framework loader.** Own JSON Schema validation; id uniqueness across foundations ∪ building_blocks; internal closure (every `building_block.foundation` resolves to a foundation id).
+  - **IOF cross-walk closure** inside Section 2. Every `external_refs.iof[].id` referenced from any BPO property must resolve to a *building-block* id; foundation ids and unknown ids both fail.
+  - **Section 2b — bidirectional scope-link consistency.** A reverse index `building_block_id → [(property, relation), …]` is built while traversing properties; out-of-scope blocks carrying ≥ 1 link FAIL, behavioural blocks carrying 0 links FAIL. Both halves must hold.
+  - Final RESULT line and Section 4 stats output extended with IOF counts.
+
+#### Documentation (1)
+
+- **[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)** — New section "IOF cross-walk: behavioural layer of an interoperability framework" after the three-layer-model section. Explains the *same asset, same rights, same outcome* positioning, the structural rather than editorial honesty enforced by the `scope` field + bidirectional check, the relation enum's exclusion of `establishes`, and points at [`mappings/IOF-coverage.md`](mappings/IOF-coverage.md) for the full coverage report. The layout listing under `mappings/` is updated to include the three new IOF files. The Validation paragraph is extended to mention IOF closure, IOF behavioural-id restriction on cross-walks, and the bidirectional scope-link consistency check.
+
+#### Property records — IOF cross-walks added (12)
+
+Each record had a new `iof` array added inside `identifiers.external_refs`. 15 entries total; honest `supports` for the 5 blocks a property materially carries, `partially-supports` for the 10 facet-only links. Every note records the behavioural slice covered AND the surrounding dimension that stays out-of-scope.
+
+- [`BPO:0003`](properties/BPO-0003-zero-knowledge.json) — BB-data-privacy (partial).
+- [`BPO:0030`](properties/BPO-0030-storage-layout-isolation.json) — BB-contract-versioning-management (partial); BB-smart-contracts-and-tokens-structure (partial).
+- [`BPO:0040`](properties/BPO-0040-access-control-correctness.json) — BB-roles-in-data-access.
+- [`BPO:0041`](properties/BPO-0041-multiparty-transaction-validation.json) — BB-roles-in-data-access (partial).
+- [`BPO:0050`](properties/BPO-0050-emergency-pause-safety.json) — BB-smart-contracts-and-tokens-structure (partial).
+- [`BPO:0073`](properties/BPO-0073-circuit-public-signal-non-leakage.json) — BB-data-privacy (partial).
+- [`BPO:0075`](properties/BPO-0075-private-data-confidentiality-hyperproperty.json) — BB-data-privacy.
+- [`BPO:0080`](properties/BPO-0080-consensus-liveness.json) — BB-consensus-and-finality (partial).
+- [`BPO:0090`](properties/BPO-0090-settlement-finality-irrevocability.json) — BB-consensus-and-finality; BB-enforceability-of-transfers-and-finality-in-settlement (partial).
+- [`BPO:0091`](properties/BPO-0091-fail-to-settle-reversal.json) — BB-on-chain-off-chain-protocols (partial).
+- [`BPO:0092`](properties/BPO-0092-transaction-sequencing-and-replay-resistance.json) — BB-cross-dlt-protocols (partial).
+- [`BPO:0102`](properties/BPO-0102-cross-ledger-inventory-consistency.json) — BB-cross-dlt-protocols; BB-asset-location-controls.
+
+### New id scheme introduced
+
+| Namespace | Pattern | Examples | Permanence |
+|---|---|---|---|
+| `IOF:F` (foundations) | `^IOF:F[0-9]+$` | `IOF:F1`, `IOF:F4` | Mirrors the IOF white paper's foundation numbering. |
+| `IOF:BB-` (building blocks) | `^IOF:BB-[a-z0-9]+(-[a-z0-9]+)*$` | `IOF:BB-cross-dlt-protocols`, `IOF:BB-data-privacy` | Kebab-case rendering of the white paper's official building-block titles. |
+
+### Deliberately *not* changed
+
+- **No new BPO:NNNN ids minted.** This integration adds a layer beside the property records; no new property was authored. The "temporal cross-ledger consistency" candidate surfaced by BB-time-management is recorded for future authoring, not minted now.
+- **No relationship-edge type invented.** IOF cross-walks live in `identifiers.external_refs.iof`, not in property records' `relationships` (which remain confined to the 13 legal property-to-property edge types).
+- **No silent rewrite of any property's formalization.** All 12 affected records had only the `external_refs.iof[]` array appended; no other field of any record was edited.
+- **DASCP, ISO 20022, and operations layers untouched.** The IOF integration is additive over the three existing cross-walks; no entries in [`mappings/dascp.framework.json`](mappings/dascp.framework.json), [`mappings/iso20022.framework.json`](mappings/iso20022.framework.json), [`mappings/operations.catalogue.json`](mappings/operations.catalogue.json), or their schemas/coverage reports were modified.
+- **Provenance / authorship conventions** — Preserved verbatim. No identifying authorship was added to any record, header, or commit field.
+
+### Final state (validator output)
+
+```
+properties: 24                                       (unchanged in meaning)
+IOF framework:        34 ids (5 foundations + 29 building blocks; behavioural=9, out-of-scope=20)
+IOF cross-walk entries from properties:          15  (closure OK)
+IOF scope-link consistency: all 9 behavioural blocks carry ≥ 1 cross-walk link;
+                            all 20 out-of-scope blocks carry zero               (OK)
+DASCP cross-walk entries from properties:        37  (unchanged)
+ISO 20022 depth-1 cross-walk entries:            16  (unchanged)
+ISO 20022 depth-2 binding entries:               19  (unchanged)
+Operations → properties (governs_properties):    35  (unchanged)
+Operations → ISO 20022 (iso20022_intents):       12  (unchanged)
+undischarged-assumption ledger entries:          18  (unchanged)
+edges by type: refines 5, refinedBy 4, composesWith 34, dependsOn 24, conflictsWith 6, mitigates 61  (unchanged)
+
+RESULT: PASS (DAG closed over BPO: namespace; DASCP / Operations / ISO 20022 / IOF frameworks integral and closed)
+```
+
+### Not committed
+
+These changes are staged for maintainer review. No `git commit`, `git push`, or branch creation was executed.
+
 ## Operations Catalogue + ISO 20022 Binding — 2026-05-22
 
 Added two additive layers to the catalogue under `mappings/` — an **Abstract Operations** catalogue and an **ISO 20022 reference binding** at two depths — closing a three-layer model that runs **ISO 20022 message intent → abstract operation → governing BPO property → ISO 20022 element binding**. The validator reports `PASS` on the final corpus (24 property records still unchanged in meaning; both new frameworks integral and closed). **Not committed** — staged for maintainer review.

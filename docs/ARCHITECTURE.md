@@ -71,6 +71,9 @@ This is an early **seed**: the meta-architecture plus a set of fully-worked prop
     iso20022.framework.json          ISO 20022 reference subset (msg / cmp / elem)
     iso20022.framework.schema.json   JSON Schema for the ISO 20022 framework
     ISO20022-coverage.md             depth-1 + depth-2 coverage report
+    iof.framework.json               IOF Interoperability Framework (foundations + building blocks)
+    iof.framework.schema.json        JSON Schema for the IOF catalogue
+    IOF-coverage.md                  per-block + inverted "what is deliberately not covered" report
 ```
 
 The seed properties are deliberately spread across the modal-class axis so the schema is exercised end-to-end: 1-safety invariants, fairness-dependent liveness guarantees (with genuine `conflictsWith` design tensions recorded, not hidden), and simulator-based hyperproperties (with the privacy claim cleanly separated from the soundness/under-constraint claim that automated tooling actually targets). The corpus forms a closed relationship DAG: every `BPO:` edge resolves to a record in the catalogue.
@@ -149,6 +152,16 @@ End-to-end: a `sese.023` instruction is an instance of `OP:SETTLE`, which is the
 
 The whole addition is purely additive: no property record's meaning changed, no `BPO:` id was reused or renumbered, no relationship-edge type was invented. Both new framework files mirror the DASCP integration pattern — shape fixed by JSON Schema, internal integrity (id uniqueness, cross-framework closure, the depth-2 symbol-in-formalization check) enforced in code by `schema/validate_refs.py`. Function-level details and full ISO 20022 message bodies stay out of scope by design.
 
+## IOF cross-walk: behavioural layer of an interoperability framework
+
+The third cross-walk binds the **Interoperability Framework for Digital Asset Securities (IOF)** — DTCC, Clearstream, Euroclear, in collaboration with BCG, February 2026 — to the BPO catalogue. The IOF organizes interoperability into 5 foundations and 29 building blocks spanning legal, data-standardisation, role-governance, infrastructure, and behavioural concerns; BPO catalogues *behavioural properties*, so the cross-walk is dense exactly where the IOF describes provable on-chain behaviour and is empty everywhere else.
+
+This shape is **the right shape for an interoperability framework**, not a coverage gap. The framework's own principle — *same asset, same rights, same outcome* across infrastructures — divides naturally into a behavioural layer (what the ledger actually does) and several surrounding layers (legal recognition, identifier and message harmonisation, role taxonomies, service levels) which are *agreements among institutions* rather than properties of any one ledger. BPO occupies the behavioural layer, and the cross-walk records exactly that — the 9 IOF blocks BPO can speak about and the 20 it cannot.
+
+To make this honesty *structural* rather than editorial, the IOF framework file records its behavioural-test verdict on each block in the data itself: every entry in `iof.framework.json:building_blocks[]` carries a `scope` field with the enum `{behavioural, out-of-scope}`. The validator then enforces **bidirectional scope-link consistency** as a build-time gate — out-of-scope blocks must carry zero cross-walk links from property records, and behavioural blocks must carry at least one. Either direction's violation fails the build. This makes the verdict immune to drift: a maintainer cannot quietly add a cross-walk to an out-of-scope block, and a behavioural block cannot remain orphaned without forcing a re-scope or a link. The relation enum on IOF cross-walks is also tighter than the DASCP enum — `{supports, partially-supports}` only, no `establishes` — because every IOF block bundles policy, infrastructure, and behavioural concerns whose multi-facet character means a single BPO property can at most materially support a block, never wholly discharge it.
+
+Of the 9 behavioural blocks, 5 carry a single `supports`-grade link to the BPO property that materially *is* the block's behavioural backbone (BB-cross-dlt-protocols and BB-asset-location-controls → BPO:0102 cross-ledger inventory consistency; BB-consensus-and-finality → BPO:0090 settlement-finality irrevocability; BB-data-privacy → BPO:0075 private-data confidentiality hyperproperty; BB-roles-in-data-access → BPO:0040 access-control correctness). The remaining links sit at `partially-supports`, with `note` fields stating both the behavioural slice covered and the surrounding dimension that stays out-of-scope. The full coverage report and its inverted "what is deliberately not covered" section live in [`mappings/IOF-coverage.md`](../mappings/IOF-coverage.md). The integration is additive: no property record's meaning changed, no `BPO:` id was reused or renumbered, no new relationship-edge type was invented, and the validator continues to report `PASS` on the final corpus.
+
 ## Validation
 
 ```
@@ -158,7 +171,7 @@ s=json.load(open('schema/property.schema.json')); v=V(s); \
 [print(f, 'OK' if not list(v.iter_errors(json.load(open(f)))) else 'FAIL') \
  for f in glob.glob('properties/*.json')]"
 ```
-`schema/validate_refs.py` runs the full check and reports `PASS` when every property conforms to the schema; every `BPO:` reference resolves to a record; the DASCP, operations, and ISO 20022 framework files each pass their own shape and internal-integrity checks (id uniqueness, intra-framework closure); every cross-framework reference resolves (`external_refs.dascp[].id`, `external_refs.iso20022[].id`, operations' `iso20022_intents`, operations' `governs_properties`); and every depth-2 ISO 20022 binding satisfies both the element-side closure and the symbol-in-formalization check (Tier 1 structured lookup against `formalization.symbols` when present, Tier 2 whole-token regex against `formalization.signature` as fallback, case-sensitive).
+`schema/validate_refs.py` runs the full check and reports `PASS` when every property conforms to the schema; every `BPO:` reference resolves to a record; the DASCP, operations, ISO 20022, and IOF framework files each pass their own shape and internal-integrity checks (id uniqueness, intra-framework closure including IOF's `building_block.foundation` closure); every cross-framework reference resolves (`external_refs.dascp[].id`, `external_refs.iso20022[].id`, `external_refs.iof[].id` resolving to behavioural building blocks, operations' `iso20022_intents`, operations' `governs_properties`); the depth-2 ISO 20022 binding satisfies both the element-side closure and the symbol-in-formalization check (Tier 1 structured lookup against `formalization.symbols` when present, Tier 2 whole-token regex against `formalization.signature` as fallback, case-sensitive); and the IOF cross-walk layer satisfies the bidirectional scope-link consistency check (out-of-scope blocks carry zero cross-walk links; behavioural blocks carry at least one).
 
 ## Direction
 
