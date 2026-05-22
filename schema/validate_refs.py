@@ -18,6 +18,15 @@ BPO corpus validator.  Fails (exit 1) on:
   - any formalization.bindings[].symbol in a property not satisfying the symbol-in-formalization check
     (depth-2 symbol closure: structured lookup against formalization.symbols if present, else
     whole-token regex against formalization.signature, case-sensitive)
+  - the IOF framework file failing its own schema or internal integrity
+    (duplicate ids across foundations ∪ building_blocks; building_block.foundation referencing
+    a non-existent foundation id within the framework)
+  - any identifiers.external_refs.iof[].id in a property not resolving to a building-block id in
+    the IOF framework (IOF cross-walk closure)
+  - bidirectional scope-link consistency between IOF building_blocks[].scope and the cross-walk
+    links from property records: a block tagged `out-of-scope` must carry zero links and a block
+    tagged `behavioural` must carry at least one, so the scope verdict cannot drift out of sync
+    with the actual links
 ATK: targets are treated as an EXTERNAL namespace (the threat-class registry)
 and are reported but not required to resolve yet.
 Also prints the assumption-discharge ledger and basic graph stats.
@@ -244,6 +253,68 @@ else:
 
 
 # ---------------------------------------------------------------------------
+# Section 0d — IOF framework  (Interoperability Framework for Digital Asset
+# Securities; DTCC / Clearstream / Euroclear / BCG, February 2026).  Loaded
+# independently of the other frameworks because IOF cross-walks attach to
+# property records (Step 3) but do not feed into the operations catalogue.
+# Step 2 establishes intra-framework integrity only; the cross-walk closure
+# and the bidirectional scope-link consistency check are added in Step 3.
+# ---------------------------------------------------------------------------
+print("\n== IOF framework ==")
+iof_path        = f"{ROOT}/mappings/iof.framework.json"
+iof_schema_path = f"{ROOT}/mappings/iof.framework.schema.json"
+iof_ids = set()
+iof_foundation_ids = set()
+iof_bb_ids = set()
+iof_bb_scope = {}
+if not (os.path.exists(iof_path) and os.path.exists(iof_schema_path)):
+    fail = True
+    print(f"  FAIL  missing mappings/iof.framework.json or mappings/iof.framework.schema.json")
+else:
+    iof        = json.load(open(iof_path,        encoding="utf-8"))
+    iof_schema = json.load(open(iof_schema_path, encoding="utf-8"))
+    shape_errs = list(Draft202012Validator(iof_schema).iter_errors(iof))
+    if shape_errs:
+        fail = True
+        print("  FAIL  iof.framework.json does not conform to iof.framework.schema.json:")
+        for e in shape_errs[:10]:
+            print("       ->", list(e.path), e.message)
+    else:
+        print("  OK   shape (matches mappings/iof.framework.schema.json)")
+
+    seen, dupes = set(), []
+    for grp in ("foundations", "building_blocks"):
+        for item in iof.get(grp, []):
+            i = item["id"]
+            if i in seen: dupes.append(i)
+            seen.add(i)
+    iof_ids |= seen
+    iof_foundation_ids = {f["id"] for f in iof.get("foundations",    [])}
+    iof_bb_ids         = {b["id"] for b in iof.get("building_blocks", [])}
+    iof_bb_scope       = {b["id"]: b["scope"] for b in iof.get("building_blocks", [])}
+    if dupes:
+        fail = True
+        print(f"  FAIL  duplicate IOF ids: {sorted(set(dupes))}")
+    else:
+        n_beh = sum(1 for s in iof_bb_scope.values() if s == "behavioural")
+        n_oos = sum(1 for s in iof_bb_scope.values() if s == "out-of-scope")
+        print(f"  OK   {len(iof_ids)} IOF ids unique "
+              f"(F={len(iof_foundation_ids)}, BB={len(iof_bb_ids)}; "
+              f"behavioural={n_beh}, out-of-scope={n_oos})")
+
+    bad_found = []
+    for b in iof.get("building_blocks", []):
+        if b.get("foundation") not in iof_foundation_ids:
+            bad_found.append((b["id"], b.get("foundation")))
+    if bad_found:
+        fail = True
+        for bid, fid in bad_found:
+            print(f"  FAIL  building_block {bid} -> foundation {fid}  (no such foundation in framework)")
+    else:
+        print(f"  OK   internal closure (every building_block.foundation resolves)")
+
+
+# ---------------------------------------------------------------------------
 # Section 1 — schema validation of property records
 # ---------------------------------------------------------------------------
 print("\n== schema ==")
@@ -263,6 +334,11 @@ ext = set()
 dascp_xref_count = 0
 iso_d1_count = 0
 iso_d2_count = 0
+iof_xref_count = 0
+# Reverse index: IOF building-block id -> list of (property id, relation) pairs.
+# Populated alongside cross-walk closure and consumed by the bidirectional
+# scope-link consistency check below.
+iof_links_by_bb = collections.defaultdict(list)
 
 def check(src, kind, tgt):
     global fail
@@ -318,7 +394,52 @@ for p in props.values():
             fail = True
             print(f"  BINDING-SYMBOL FAIL  {p['id']} symbol '{symbol}' ({reason})")
 
-print("  all BPO: / DASCP: / ISO 20022: targets resolve" if not fail else "  REFERENCE ERRORS ABOVE")
+    # NEW: IOF cross-walks (closure into building_blocks[]; foundation ids and unknown
+    # ids are both rejected here. Reverse index feeds the scope-link consistency check.)
+    for entry in p.get("identifiers", {}).get("external_refs", {}).get("iof", []):
+        iof_xref_count += 1
+        i_id = entry["id"]
+        if i_id not in iof_bb_ids:
+            fail = True
+            print(f"  DANGLING {p['id']} --iof({entry.get('relation','?')})--> {i_id}  "
+                  f"(no such IOF building-block id)")
+        else:
+            iof_links_by_bb[i_id].append((p["id"], entry.get("relation", "?")))
+
+print("  all BPO: / DASCP: / ISO 20022: / IOF: targets resolve" if not fail else "  REFERENCE ERRORS ABOVE")
+
+
+# ---------------------------------------------------------------------------
+# Section 2b — IOF bidirectional scope-link consistency.
+# Out-of-scope blocks must carry zero cross-walk links (otherwise the `scope`
+# verdict in the framework file contradicts the actual links).  Behavioural
+# blocks must carry at least one (otherwise the verdict claims a behavioural
+# mapping that the corpus does not realize).  Both directions are FAIL.
+# ---------------------------------------------------------------------------
+print("\n== IOF scope-link consistency ==")
+oos_with_links, beh_without_links = [], []
+for bb_id, scope in iof_bb_scope.items():
+    n_links = len(iof_links_by_bb.get(bb_id, []))
+    if scope == "out-of-scope" and n_links > 0:
+        oos_with_links.append((bb_id, n_links, iof_links_by_bb[bb_id]))
+    if scope == "behavioural" and n_links == 0:
+        beh_without_links.append(bb_id)
+if oos_with_links:
+    fail = True
+    for bb_id, n, links in oos_with_links:
+        srcs = ", ".join(f"{pid}({rel})" for pid, rel in links)
+        print(f"  FAIL  out-of-scope {bb_id} carries {n} cross-walk link(s): {srcs}  "
+              f"(downgrade the scope or remove the link)")
+if beh_without_links:
+    fail = True
+    for bb_id in beh_without_links:
+        print(f"  FAIL  behavioural {bb_id} carries 0 cross-walk links  "
+              f"(downgrade the scope to out-of-scope or add a link)")
+if not (oos_with_links or beh_without_links):
+    n_beh = sum(1 for s in iof_bb_scope.values() if s == "behavioural")
+    n_oos = sum(1 for s in iof_bb_scope.values() if s == "out-of-scope")
+    print(f"  OK   all {n_beh} behavioural blocks carry ≥ 1 cross-walk link; "
+          f"all {n_oos} out-of-scope blocks carry zero")
 
 
 # ---------------------------------------------------------------------------
@@ -343,9 +464,14 @@ for a in sorted(ext):
 print(f"  DASCP cross-walk entries from properties:        {dascp_xref_count}")
 print(f"  ISO 20022 depth-1 cross-walk entries:            {iso_d1_count}")
 print(f"  ISO 20022 depth-2 binding entries:               {iso_d2_count}")
+print(f"  IOF cross-walk entries from properties:          {iof_xref_count}")
 print(f"  Operations catalogue: {len(op_ids)} operations")
 print(f"  ISO 20022 framework:  {len(iso_ids)} ids (msg+cmp+elem combined)")
+print(f"  IOF framework:        {len(iof_ids)} ids "
+      f"({len(iof_foundation_ids)} foundations + {len(iof_bb_ids)} building blocks; "
+      f"behavioural={sum(1 for s in iof_bb_scope.values() if s == 'behavioural')}, "
+      f"out-of-scope={sum(1 for s in iof_bb_scope.values() if s == 'out-of-scope')})")
 
 
-print("\nRESULT:", "FAIL" if fail else "PASS (DAG closed over BPO: namespace; DASCP / Operations / ISO 20022 frameworks integral and closed)")
+print("\nRESULT:", "FAIL" if fail else "PASS (DAG closed over BPO: namespace; DASCP / Operations / ISO 20022 / IOF frameworks integral and closed)")
 sys.exit(1 if fail else 0)

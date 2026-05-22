@@ -67,6 +67,20 @@
                 }
               }
             },
+            "iof": {
+              "type": "array",
+              "description": "Cross-walk to the Interoperability Framework (IOF) for Digital Asset Securities (DTCC/Clearstream/Euroclear/BCG, February 2026). Each entry references an IOF *building block* id (only blocks whose `scope` is `behavioural` may be referenced) resolved against mappings/iof.framework.json. The relation enum deliberately excludes `establishes` — IOF building blocks span policy, infrastructure, and behavioural concerns whose multi-facet character means a single BPO property can at most materially support a block, never wholly discharge it. Each link's note should spell out the residual (which dimension of the block stays out-of-scope for BPO) so the conservatism of the link is auditable. Cross-walk closure and bidirectional scope-link consistency (out-of-scope blocks must carry zero links; behavioural blocks must carry at least one) are enforced by schema/validate_refs.py.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "relation"],
+                "properties": {
+                  "id": { "type": "string", "pattern": "^IOF:BB-[a-z0-9]+(-[a-z0-9]+)*$" },
+                  "relation": { "enum": ["supports", "partially-supports"] },
+                  "note": { "type": "string" }
+                }
+              }
+            },
             "other": { "type": "array", "items": { "type": "string" } }
           }
         }
