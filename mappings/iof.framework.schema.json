@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bpo.spec/mappings/iof.framework.schema.json",
+  "title": "IOF Framework Catalogue",
+  "description": "Machine-readable catalogue of the Interoperability Framework (IOF) for Digital Asset Securities (DTCC, Clearstream, Euroclear, BCG — February 2026). Authoritative resolution target for IOF ids referenced from BPO property records via identifiers.external_refs.iof. This JSON Schema fixes the file SHAPE; internal integrity (id uniqueness across foundations ∪ building_blocks, building_block.foundation closure into foundations) is enforced by schema/validate_refs.py. The Step 3 validator additions further enforce cross-walk closure (every external_refs.iof[].id resolves into building_blocks[]) AND bidirectional scope-link consistency (out-of-scope blocks must carry zero cross-walk links; behavioural blocks must carry at least one) so the `scope` field cannot drift out of sync with the actual links.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["framework", "title", "version", "publishers", "license_note", "foundations", "building_blocks"],
+  "properties": {
+    "framework":    { "const": "IOF" },
+    "title":        { "type": "string" },
+    "version":      { "type": "string" },
+    "publishers":   { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "source":       { "type": "string" },
+    "license_note": { "type": "string" },
+    "foundations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "description"],
+        "properties": {
+          "id":          { "type": "string", "pattern": "^IOF:F[0-9]+$" },
+          "title":       { "type": "string" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "building_blocks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "foundation", "title", "description", "enablers", "scope"],
+        "properties": {
+          "id":          { "type": "string", "pattern": "^IOF:BB-[a-z0-9]+(-[a-z0-9]+)*$" },
+          "foundation":  { "type": "string", "pattern": "^IOF:F[0-9]+$" },
+          "title":       { "type": "string" },
+          "description": { "type": "string", "description": "One-line paraphrased description in our own words. Verbatim content from the white paper is limited to the foundation/building-block titles." },
+          "enablers": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "enum": ["data", "processes", "roles"] },
+            "description": "The IOF's three cross-cutting enablers (§3.5 of the white paper). A block may carry more than one when its content spans dimensions."
+          },
+          "scope": {
+            "enum": ["behavioural", "out-of-scope"],
+            "description": "Behavioural-test verdict, recorded in the framework data so it is durable and machine-enforceable. `behavioural` blocks are those a smart-contract or ledger system can be proven to satisfy and so admit cross-walking to BPO properties; `out-of-scope` blocks describe legal, regulatory, governance, data-harmonization, operational, or SLA concerns and must carry zero BPO cross-walk links. The bidirectional scope-link consistency check (Step 3 of the IOF integration) enforces this."
+          }
+        }
+      }
+    }
+  }
+}

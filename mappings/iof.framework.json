@@ -1,0 +1,275 @@
+{
+  "framework": "IOF",
+  "title": "Interoperability Framework for Digital Asset Securities",
+  "version": "1.0 (February 2026)",
+  "publishers": ["DTCC", "Clearstream", "Euroclear", "BCG"],
+  "source": "https://www.dtcc.com/-/media/interoperable-digital-asset-securities-white-paper.pdf",
+  "license_note": "IOF is a third-party copyrighted white paper (DTCC, Clearstream, Euroclear, in collaboration with BCG, February 2026). This file uses IOF foundation and building-block ids, official titles taken verbatim from Exhibits 2–3 (pp. 11–14), and short paraphrased descriptions in our own words. Foundation assignments follow the white paper's appendix (§6.1, pp. 27–36). The `scope` field on each building block records the behavioural-test verdict (does the block describe something a smart-contract or ledger system DOES that a formal property could capture?). Bidirectional scope-link consistency with BPO property records' `external_refs.iof` arrays is enforced by schema/validate_refs.py from Step 3 of the IOF integration onward — out-of-scope blocks must carry zero cross-walk links; behavioural blocks must carry at least one. For authoritative prose, consult the source URL.",
+
+  "foundations": [
+    {
+      "id": "IOF:F1",
+      "title": "Assets and liabilities",
+      "description": "The parties' formal engagements — contracts, instruments, smart contracts — together with the identifiers, schemas, and lifecycle logic that allow the same engagement to be recognised consistently across ledgers."
+    },
+    {
+      "id": "IOF:F2",
+      "title": "Ownership recognition",
+      "description": "Binding ownership rights to operational control: portable identities, harmonised account and wallet models, and enforceable permissions so that 'who may do what' is unambiguous across infrastructures."
+    },
+    {
+      "id": "IOF:F3",
+      "title": "Asset lifecycle and movement protocols",
+      "description": "How asset lifecycle and movement events are coordinated across ledgers and traditional systems — message semantics, settlement protocols, cross-chain coordination, and the responsibility allocation for orchestration."
+    },
+    {
+      "id": "IOF:F4",
+      "title": "Ledgers",
+      "description": "What the ledger layer itself does — consensus and finality, smart-contract structure, service levels, privacy, role-based access, and the separation between execution and anchoring across layered architectures."
+    },
+    {
+      "id": "IOF:F5",
+      "title": "Legal and regulatory compliance",
+      "description": "The legal scaffolding around interoperability — asset classification, custody and settlement rules, transfer enforceability and settlement finality, AML/CFT, dispute-resolution jurisdiction, and licensing of market institutions."
+    }
+  ],
+
+  "building_blocks": [
+    {
+      "id": "IOF:BB-security-and-contract-identification",
+      "foundation": "IOF:F1",
+      "title": "Security and contract identification",
+      "description": "Common identifier conventions (ISIN, UTI, and equivalents) so that on-chain and off-chain representations of the same security or contract are recognised unambiguously and can be reconciled across ledgers, including the relationship between a real-world asset and its digital twin.",
+      "enablers": ["data"],
+      "scope": "out-of-scope"
+    },
+    {
+      "id": "IOF:BB-terms-and-conditions",
+      "foundation": "IOF:F1",
+      "title": "Terms and conditions",
+      "description": "Shared schemas for the economic terms, governing law, dispute-resolution clauses, and external-document references of a security or contract, so its meaning is preserved when the same asset appears across ledgers.",
+      "enablers": ["data"],
+      "scope": "out-of-scope"
+    },
+    {
+      "id": "IOF:BB-functions-and-corporate-actions",
+      "foundation": "IOF:F1",
+      "title": "Functions and corporate actions",
+      "description": "Common event types, semantics, and calculation conventions for lifecycle functions — issue, redeem, exercise, coupon, dividend, split — together with utility and maintenance functions, so the same action is processable identically across platforms.",
+      "enablers": ["data", "processes"],
+      "scope": "out-of-scope"
+    },
+    {
+      "id": "IOF:BB-contract-versioning-management",
+      "foundation": "IOF:F1",
+      "title": "Contract versioning management",
+      "description": "Coherent versioning of long-lived on-chain securities and contracts so that upgrades — for regulatory change, corporate-structure change, or DLT-standard change — do not distort flows or break transferability across versions or chains.",
+      "enablers": ["data", "processes"],
+      "scope": "behavioural"
+    },
+    {
+      "id": "IOF:BB-on-chain-data-portability",
+      "foundation": "IOF:F1",
+      "title": "On-chain data portability",
+      "description": "A portable on-chain asset record — identifier, terms, rights, and event schema — that can be read and reused across ledgers without loss of meaning or legal effect, so the same asset is the same wherever it appears.",
+      "enablers": ["data"],
+      "scope": "out-of-scope"
+    },
+    {
+      "id": "IOF:BB-level-of-ownership-and-associated-rights",
+      "foundation": "IOF:F1",
+      "title": "Level of ownership and associated rights",
+      "description": "Harmonised definition of the ownership levels relevant to capital-market activity — legal ownership, contractual claim to restitution, and security interest of a collateral taker — so that rights and obligations travel consistently with the asset across ledgers.",
+      "enablers": ["data"],
+      "scope": "out-of-scope"
+    },
+    {
+      "id": "IOF:BB-roles-in-contract-security-lifecycle",
+      "foundation": "IOF:F1",
+      "title": "Roles in contract/security lifecycle",
+      "description": "Common naming and permissions for the standard roles that act on a security or contract across its lifecycle — issuer, guarantor, paying agent, registrar, transfer agent, CSD, regulator, tokenizer.",
+      "enablers": ["roles"],
+      "scope": "out-of-scope"
+    },
+
+    {
+      "id": "IOF:BB-identity-recognition",
+      "foundation": "IOF:F2",
+      "title": "Identity recognition",
+      "description": "Portable credential schema binding legal entities and persons to the keys and wallets they control — LEI/BIC to DID/VC mappings, supported signature suites, key rotation and revocation, and reusable KYC/KYB onboarding decisions across venues.",
+      "enablers": ["data"],
+      "scope": "out-of-scope"
+    },
+    {
+      "id": "IOF:BB-accounts-wallets-capabilities-harmonization",
+      "foundation": "IOF:F2",
+      "title": "Accounts/wallets capabilities harmonization",
+      "description": "Harmonised on-chain implementations of the account models built up in traditional finance — purpose (cash vs security), type (custodial, omnibus, segregated, nominee, trust), regulatory treatment, capabilities (freeze, lock, escrow, pledge, recovery), and risk controls.",
+      "enablers": ["data", "processes"],
+      "scope": "out-of-scope"
+    },
+    {
+      "id": "IOF:BB-ultimate-beneficial-owner-traceability",
+      "foundation": "IOF:F2",
+      "title": "Ultimate Beneficial Owner traceability",
+      "description": "An attestation model and query protocol for revealing beneficial ownership across custodial layers under AML and travel-rule requirements, integrated with public registries and respectful of privacy and data-residency constraints.",
+      "enablers": ["data"],
+      "scope": "out-of-scope"
+    },
+    {
+      "id": "IOF:BB-role-responsibilities-in-accounts-wallets-management",
+      "foundation": "IOF:F2",
+      "title": "Role responsibilities in accounts/wallets management",
+      "description": "Harmonised transaction-authorization rules — who can do what, when, to whom, how much — together with role definitions, RBAC administration with separation of admin from operations, and audit logs for every privileged action.",
+      "enablers": ["roles"],
+      "scope": "out-of-scope"
+    },
+
+    {
+      "id": "IOF:BB-message-purpose",
+      "foundation": "IOF:F3",
+      "title": "Message purpose",
+      "description": "A common message model defining who sends what to whom and the intended legal and economic effect of each instruction — ISO-20022-style standardisation of message types, attributes, and outcomes so that an instruction triggers identical processes on DLT networks and traditional systems. Out-of-scope at the IOF cross-walk layer because BPO already realises the behavioural reading of this block via the depth-1 and depth-2 ISO 20022 binding layer (identifiers.external_refs.iso20022 and formalization.bindings on property records); cross-walking it here as well would double-count.",
+      "enablers": ["data", "processes"],
+      "scope": "out-of-scope"
+    },
+    {
+      "id": "IOF:BB-on-chain-off-chain-protocols",
+      "foundation": "IOF:F3",
+      "title": "On-Chain <> Off-chain protocols",
+      "description": "Deterministic linkage between on-chain and off-chain ledgers with well-defined callbacks, timing, data-level harmonisation, and error handling — idempotency, synchronised finality, atomicity across legs, and compensating actions on failure — so that hybrid workflows do not diverge.",
+      "enablers": ["processes"],
+      "scope": "behavioural"
+    },
+    {
+      "id": "IOF:BB-cross-dlt-protocols",
+      "foundation": "IOF:F3",
+      "title": "Cross-DLT protocols",
+      "description": "Harmonised protocols that move value and state across heterogeneous DLTs with security, finality, and contract compatibility — eliminating partial completion (no token minted or burned without its paired action on the other chain), preserving wrapped-token lineage and entitlement traceability, and surviving upgrades and forks.",
+      "enablers": ["processes"],
+      "scope": "behavioural"
+    },
+    {
+      "id": "IOF:BB-asset-location-controls",
+      "foundation": "IOF:F3",
+      "title": "Asset location controls",
+      "description": "A common ruleset specifying the authoritative location of an asset at any moment (the 'source of truth') and how authority transfers between ledgers — lock and burn on one side paired with mint and release on the other — without creating duplicate title.",
+      "enablers": ["processes"],
+      "scope": "behavioural"
+    },
+    {
+      "id": "IOF:BB-time-management",
+      "foundation": "IOF:F3",
+      "title": "Time management",
+      "description": "Synchronised cross-ledger time references and snapshot mechanisms — coordinated clocks or trusted timekeeping, coordinated state snapshots, and transaction-sequencing rules — so that record-time ownership is unambiguous and an in-transit asset is never double-counted across chains. Out-of-scope because the primary content (synchronised clocks, trusted time oracles, central timekeeping services) is governance / infrastructure; the one behavioural facet (no double-counting in transit) partially aligns with BPO:0102's joint-state invariant but would require a dedicated temporal cross-ledger consistency property to bind cleanly. Candidate for a future BPO property.",
+      "enablers": ["processes"],
+      "scope": "out-of-scope"
+    },
+    {
+      "id": "IOF:BB-intermediary-responsibilities-and-obligations",
+      "foundation": "IOF:F3",
+      "title": "Intermediary responsibilities and obligations",
+      "description": "Clearly defined roles, SLAs, and liability for every intermediary in cross-platform transactions — oracle providers, bridge relays, custodians, clearing houses, technology vendors — together with audit and evidence trails sufficient to allocate accountability when something breaks.",
+      "enablers": ["roles"],
+      "scope": "out-of-scope"
+    },
+
+    {
+      "id": "IOF:BB-consensus-and-finality",
+      "foundation": "IOF:F4",
+      "title": "Consensus and finality",
+      "description": "A coherent treatment of finality across heterogeneous consensus mechanisms — harmonised finality definitions, adapters that interpret each chain's finality semantics correctly, and a guarantee that a source transaction will not be reorged before it triggers an action on a target ledger.",
+      "enablers": ["processes"],
+      "scope": "behavioural"
+    },
+    {
+      "id": "IOF:BB-smart-contracts-and-tokens-structure",
+      "foundation": "IOF:F4",
+      "title": "Smart contracts and tokens structure",
+      "description": "Standardised smart-contract and token structures across platforms — chain-agnostic interfaces, verifiable contract provenance, audited code, governed upgrades, and explicit pause and kill semantics — so the same token behaves identically wherever it appears.",
+      "enablers": ["data", "processes"],
+      "scope": "behavioural"
+    },
+    {
+      "id": "IOF:BB-minimum-service-levels",
+      "foundation": "IOF:F4",
+      "title": "Minimum service levels",
+      "description": "Minimum operational service levels for DLT platforms in capital-market use — very high availability (typically >99.95%), fast and predictable processing, high throughput, and recovery objectives aligned with CPMI-IOSCO norms.",
+      "enablers": ["processes"],
+      "scope": "out-of-scope"
+    },
+    {
+      "id": "IOF:BB-data-privacy",
+      "foundation": "IOF:F4",
+      "title": "Data privacy",
+      "description": "Protection of sensitive data while preserving interoperability and verifiability — data minimisation and placement, selective disclosure (encryption, redaction, ZK proofs), encryption in flight and at rest with key rotation, and per-jurisdiction retention and deletion controls.",
+      "enablers": ["data"],
+      "scope": "behavioural"
+    },
+    {
+      "id": "IOF:BB-segregation-of-duties",
+      "foundation": "IOF:F4",
+      "title": "Segregation of duties",
+      "description": "A defined cross-layer interface between an L1 anchoring layer and L2 execution layers — L1 holding the source of truth (state root, data availability), L2 providing scale, and canonical proofs and cross-layer messages connecting them so L2 state is verifiable by other ledgers and by traditional finance systems. Out-of-scope at the IOF cross-walk layer because the behavioural content (L1/L2 finality mapping, source-of-truth separation) is already covered by IOF:BB-consensus-and-finality's cross-walks to BPO:0090 and BPO:0080; relinking it here would dual-link without adding coverage.",
+      "enablers": ["processes", "roles"],
+      "scope": "out-of-scope"
+    },
+    {
+      "id": "IOF:BB-roles-in-data-access",
+      "foundation": "IOF:F4",
+      "title": "Roles in data access",
+      "description": "A portable, role-based entitlement model for reading, writing, observing, and administering ledger data — role taxonomy, scopes, RBAC/ABAC with dynamic constraints (jurisdiction, instrument class, time windows, amount thresholds), least privilege, separation of duties, selective disclosure, and full auditability.",
+      "enablers": ["roles"],
+      "scope": "behavioural"
+    },
+
+    {
+      "id": "IOF:BB-assets-taxonomy-and-classification",
+      "foundation": "IOF:F5",
+      "title": "Assets taxonomy and classification",
+      "description": "Harmonised mapping of assets into regulatory categories (securities, commodities, payment tokens) with consistent definitions across jurisdictions so the same instrument carries the same legal class wherever it trades.",
+      "enablers": ["data"],
+      "scope": "out-of-scope"
+    },
+    {
+      "id": "IOF:BB-custody-and-settlement-rules",
+      "foundation": "IOF:F5",
+      "title": "Custody and settlement rules",
+      "description": "Clear regulatory rules for how client assets are held, how customer holdings are segregated from firm assets, and how delivery-versus-payment is achieved across ledgers — anchoring client-asset protection and legal recognition of settlement.",
+      "enablers": ["processes"],
+      "scope": "out-of-scope"
+    },
+    {
+      "id": "IOF:BB-enforceability-of-transfers-and-finality-in-settlement",
+      "foundation": "IOF:F5",
+      "title": "Enforceability of transfers and finality in settlement",
+      "description": "Legal certainty that a digital-asset transfer is valid and irrevocable at a defined point — recognition of electronic signatures, smart contracts, and ledger records as legally binding, with statutes and rules defining settlement finality so transfers cannot be reversed even on counterparty insolvency.",
+      "enablers": ["processes"],
+      "scope": "behavioural"
+    },
+    {
+      "id": "IOF:BB-aml-cft-sanctions",
+      "foundation": "IOF:F5",
+      "title": "AML/CFT sanctions",
+      "description": "Implementation of AML/CFT controls and sanctions screening at each critical point of transfer — customer due diligence, FATF travel-rule data exchange, transaction monitoring, blocking of sanctioned persons or addresses, and record-keeping for audit.",
+      "enablers": ["processes"],
+      "scope": "out-of-scope"
+    },
+    {
+      "id": "IOF:BB-jurisdiction-in-dispute-resolution",
+      "foundation": "IOF:F5",
+      "title": "Jurisdiction or responsibilities in dispute resolution",
+      "description": "Pre-agreed mechanisms for resolving disputes and clarifying which laws apply in cross-border or cross-ledger transactions — governing law and forum, treatment of decentralised-system evidence, and clarity on which authority enforces outcomes.",
+      "enablers": ["roles"],
+      "scope": "out-of-scope"
+    },
+    {
+      "id": "IOF:BB-licensing-regime-of-market-institutions",
+      "foundation": "IOF:F5",
+      "title": "Licensing regime of market institutions",
+      "description": "Coherent licensing and oversight frameworks for every key market role across jurisdictions — issuers, exchanges, brokers, custodians, clearing and settlement providers, and interoperability service providers (bridge operators, oracles) — to keep regulatory authorisation equivalent and prevent arbitrage.",
+      "enablers": ["roles"],
+      "scope": "out-of-scope"
+    }
+  ]
+}
