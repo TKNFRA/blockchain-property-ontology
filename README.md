@@ -65,7 +65,7 @@ This project is dual-licensed to keep it open while protecting authorship and at
 
 ## Authorship
 
-Created and maintained by **&lt;AUTHOR NAME&gt;**. This project began as the work of a single author and remains under that author's stewardship; attribution is required for any reuse or derivative.
+Created and maintained by **Zakaryae Boudi**. This project began as the work of a single author and remains under that author's stewardship; attribution is required for any reuse or derivative.
 
 ---
 
