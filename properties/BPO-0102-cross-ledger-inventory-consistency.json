@@ -14,6 +14,10 @@
       ],
       "iso20022": [
         { "id": "ISO20022:cmp/FinancialInstrument", "relation": "relates-to", "note": "Cross-ledger inventory consistency is per-instrument; the conserved aggregate Σ_L supply_L(a) is over all ledger-side representations of a single FinancialInstrument." }
+      ],
+      "iof": [
+        { "id": "IOF:BB-cross-dlt-protocols", "relation": "supports", "note": "Joint-state inventory conservation across paired lock-and-mint / burn-and-release is the on-chain behavioural backbone of cross-DLT integrity — no token minted or burned without its paired action on the other chain; the wrapped-token lineage and entitlement-traceability METADATA schema, the protocol-upgrade and fork-survival governance, and contract-compatibility harmonisation across heterogeneous DLTs stay out-of-scope as data-harmonisation and governance concerns." },
+        { "id": "IOF:BB-asset-location-controls", "relation": "supports", "note": "Conservation across paired lock-and-mint / burn-and-release IS the no-duplicate-title invariant the block requires — the authoritative location of the asset transfers atomically and the joint sum is preserved; the metadata layer specifying which ledger is the authoritative source of truth at any moment and the common ruleset governing that allocation stay out-of-scope as data-harmonisation concerns." }
       ]
     }
   },

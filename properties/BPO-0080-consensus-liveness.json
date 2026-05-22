@@ -12,6 +12,9 @@
       "dascp": [
         { "id": "C36-R", "relation": "partially-supports", "note": "Formal liveness property under partial synchrony; redundancy and concurrency are operational mitigations toward this goal but do not themselves discharge the synchrony or honest-majority assumptions." },
         { "id": "C38-R", "relation": "partially-supports", "note": "Formal liveness property; failure prevention/detection/recovery are operational mitigations toward sustained progress but do not themselves discharge the protocol-level liveness obligation." }
+      ],
+      "iof": [
+        { "id": "IOF:BB-consensus-and-finality", "relation": "partially-supports", "note": "Liveness is the progress half of consensus-and-finality (the chain keeps producing and finalizing blocks under assumptions); safety / finality irrevocability is the complementary half, carried by BPO:0090. Cross-chain harmonisation of finality definitions and adapters between heterogeneous mechanisms stays out-of-scope as a data-harmonisation concern." }
       ]
     }
   },

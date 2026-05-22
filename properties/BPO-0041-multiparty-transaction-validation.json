@@ -16,6 +16,9 @@
       ],
       "iso20022": [
         { "id": "ISO20022:sese.023", "relation": "constrains", "note": "When a settlement transaction instruction requires multi-party validation, the property's k-of-n approval gate constrains whether the instruction can be admitted at the contract layer." }
+      ],
+      "iof": [
+        { "id": "IOF:BB-roles-in-data-access", "relation": "partially-supports", "note": "k-of-n threshold authorisation is the separation-of-duties facet of the entitlement model — privileged actions require distinct signers; the rest of the role taxonomy, the dynamic ABAC constraints, and the audit-log infrastructure stay out-of-scope as data-harmonisation and operational concerns." }
       ]
     }
   },

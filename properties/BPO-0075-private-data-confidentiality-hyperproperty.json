@@ -13,6 +13,9 @@
       "dascp": [
         { "id": "C40-R", "relation": "partially-supports", "note": "Formalizes the confidentiality-against-public-observer hyperproperty that C40-R aspirationally requires; the data-life-cycle aspects of C40-R (collection, retention, deletion procedures) are operational and stay out of BPO scope." },
         { "id": "C41-R", "relation": "partially-supports", "note": "Provides the formal indistinguishability content C41-R points at; the identifier-level pseudonymization PROCESS (key custody, re-identification workflows) stays out of scope." }
+      ],
+      "iof": [
+        { "id": "IOF:BB-data-privacy", "relation": "supports", "note": "Non-interference at network-observer scope is the formal substance the block's data-minimisation, placement, and selective-disclosure goals reduce to on the ledger; encryption-in-flight and at-rest, key rotation, and per-jurisdiction retention/deletion controls stay out-of-scope as operational and infrastructure concerns." }
       ]
     }
   },

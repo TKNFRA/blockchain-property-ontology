@@ -15,6 +15,9 @@
       ],
       "iso20022": [
         { "id": "ISO20022:elem/SettlementTransactionIdentification", "relation": "relates-to", "note": "The property's per-issuer monotone-nonce serves the same uniqueness role at the contract layer that SettlementTransactionIdentification serves in ISO 20022 — a single-use identifier preventing replay and acting as the join key for subsequent status / confirmation messages." }
+      ],
+      "iof": [
+        { "id": "IOF:BB-cross-dlt-protocols", "relation": "partially-supports", "note": "Replay-resistance with sufficient cross-context domain separation is the replay-slice of cross-DLT integrity (a relay-evidence or signature accepted on one chain cannot be re-presented on another); the rest of the block — joint-state inventory conservation, wrapped-token lineage, fork-survival of bridge protocols — is carried separately by BPO:0102, and the bridge-relay soundness assumption itself stays out-of-scope as a cryptographic / committee assumption." }
       ]
     }
   },

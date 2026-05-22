@@ -17,6 +17,9 @@
         { "id": "C28-S", "relation": "partially-supports", "note": "Establishes that the role-admin DAG is sound and authority is monotone under delegation; does not fix the specific role catalogue C28-S mandates." },
         { "id": "C15-S", "relation": "partially-supports", "note": "Establishes correctness of the access-enforcement layer; does not bind it to the KYC/sanctions criteria C15-S requires." },
         { "id": "C45-R", "relation": "partially-supports", "note": "Establishes correctness of privileged-role assignment and revocation that any data-integrity-correction capability depends on; does not establish the correction mechanism itself." }
+      ],
+      "iof": [
+        { "id": "IOF:BB-roles-in-data-access", "relation": "supports", "note": "On-chain access-control correctness — authority closure, privilege monotonicity, sound revocation — is the behavioural core of any RBAC entitlement model on the ledger; dynamic ABAC constraints (jurisdiction, instrument class, time windows, amount thresholds) and the audit-log / selective-disclosure infrastructure stay out-of-scope as data-harmonisation and operational concerns." }
       ]
     }
   },

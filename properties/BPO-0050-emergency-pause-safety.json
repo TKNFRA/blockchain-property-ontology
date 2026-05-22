@@ -18,6 +18,9 @@
       ],
       "iso20022": [
         { "id": "ISO20022:sese.023", "relation": "constrains", "note": "While paused, settlement transaction instructions are halted; the property constrains the processing of sese.023 instances within the paused mode and mandates either bounded auto-unpause or an always-available recovery edge so the pause cannot indefinitely freeze entitled exits." }
+      ],
+      "iof": [
+        { "id": "IOF:BB-smart-contracts-and-tokens-structure", "relation": "partially-supports", "note": "Bounded emergency-pause safety with a preserved exit is the formal content behind the block's explicit pause/kill-semantics requirement; the chain-agnostic-interface, verifiable-provenance, audited-code, and governed-upgrade ceremony facets of token/contract structure standardisation stay out-of-scope as data-standardisation and operational concerns." }
       ]
     }
   },

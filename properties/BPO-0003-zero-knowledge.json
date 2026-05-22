@@ -13,6 +13,9 @@
       "dascp": [
         { "id": "C40-R", "relation": "partially-supports", "note": "Cryptographic-level confidentiality via simulator-based witness privacy; does not establish network- or storage-level segregation of confidential data." },
         { "id": "C41-R", "relation": "partially-supports", "note": "ZK provides one form of cryptographic anonymization at the proof layer; does not cover identifier-level pseudonymization across the network." }
+      ],
+      "iof": [
+        { "id": "IOF:BB-data-privacy", "relation": "partially-supports", "note": "Simulator-based witness privacy is the cryptographic-proof slice of the selective-disclosure mechanisms the data-privacy block enumerates; the block's data-placement / minimisation policy, encryption in flight and at rest, key rotation, and per-jurisdiction retention/deletion controls stay out-of-scope as operational and infrastructure concerns." }
       ]
     }
   },

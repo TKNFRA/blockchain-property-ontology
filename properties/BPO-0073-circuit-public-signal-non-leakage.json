@@ -12,6 +12,9 @@
       "dascp": [
         { "id": "C40-R", "relation": "partially-supports", "note": "Circuit-level non-leakage establishes that public signals carry no secret-witness information beyond the declassified relation; does not establish network- or storage-level data segregation." },
         { "id": "C41-R", "relation": "partially-supports", "note": "Information-flow typing of circuits provides one form of structural anonymization at the proof boundary; does not cover identifier-level pseudonymization across the network." }
+      ],
+      "iof": [
+        { "id": "IOF:BB-data-privacy", "relation": "partially-supports", "note": "Public-signal non-leakage is the formal selective-disclosure slice that any ZK-based privacy-preserving disclosure relies on — public outputs reveal exactly the declassified relation and nothing further; the non-ZK disclosure paths (redaction, encryption in flight/at rest, key rotation, per-jurisdiction retention/deletion controls) stay out-of-scope as separate infrastructure concerns." }
       ]
     }
   },

@@ -16,6 +16,10 @@
         { "id": "ISO20022:sese.023", "relation": "constrains", "note": "The settlement transaction instruction must reach a final state; the property constrains the lifecycle of a sese.023 instance from pending to final and mandates absorbing semantics." },
         { "id": "ISO20022:sese.024", "relation": "constrains", "note": "Status advice must accurately reflect finality once reached and cannot regress; the property's persistence invariant constrains the legal status transitions surfaced via sese.024." },
         { "id": "ISO20022:sese.025", "relation": "constrains", "note": "Settlement confirmation corresponds to the FINAL state; the property guarantees the confirmation reflects an irrevocable accountedOutcome." }
+      ],
+      "iof": [
+        { "id": "IOF:BB-consensus-and-finality", "relation": "supports", "note": "Finality-as-invariant is the safety core of the block — a source transaction, once finalized, stays final and cannot be reorged before downstream action; the harmonised finality-semantics adapters between heterogeneous chains and the cross-chain finality-recognition rules stay out-of-scope as data-harmonisation concerns." },
+        { "id": "IOF:BB-enforceability-of-transfers-and-finality-in-settlement", "relation": "partially-supports", "note": "On-chain settlement-finality irrevocability is the technical substrate of legal enforceability — a transfer cannot be reversed at the ledger layer once finalized; the legal-recognition layer (statutes recognising electronic signatures, smart contracts, and ledger records as legally binding; settlement-finality rules under counterparty insolvency) stays out-of-scope as a legal concern." }
       ]
     }
   },

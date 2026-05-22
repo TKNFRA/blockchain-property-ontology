@@ -14,6 +14,9 @@
       ],
       "iso20022": [
         { "id": "ISO20022:sese.024", "relation": "relates-to", "note": "Status advice reports the failure state that triggers compensation; the property relates to the status mechanism but does not directly constrain sese.024 — it constrains the system's response (a bounded-time compensating action) after failure has surfaced through this message." }
+      ],
+      "iof": [
+        { "id": "IOF:BB-on-chain-off-chain-protocols", "relation": "partially-supports", "note": "Bounded compensating action returning pre-settlement state is the on-chain atomicity-on-failure slice the block requires for hybrid workflows — when a leg fails, the system reaches a clean pre-settlement state in bounded time; the block's other content (off-chain callbacks, SLA timing, data-level harmonisation of error semantics, idempotency conventions, synchronised finality across legs) stays out-of-scope as infrastructure and data-harmonisation concerns." }
       ]
     }
   },
