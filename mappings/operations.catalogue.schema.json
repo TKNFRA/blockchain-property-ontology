@@ -12,6 +12,7 @@
     "version":       { "type": "string" },
     "license_note":  { "type": "string" },
     "inclusion_bar": { "type": "string", "description": "The written test a candidate must pass to be admitted to operations[]. Enforced by review, not by code." },
+    "size_guidance":  { "type": "string", "description": "The catalogue's soft size ceiling and the rationale for its current value. Deliberately prose rather than an integer, and deliberately not enforced by code: the ceiling is a smell threshold prompting a review of whether `inclusion_bar` is still being applied, not a quota. A candidate that clears the bar but is excluded to stay under the number is evidence the number is wrong, so any change to it carries its reasoning here and in CHANGELOG.md." },
     "operations": {
       "type": "array",
       "minItems": 1,

@@ -1,9 +1,10 @@
 {
   "framework": "OPERATIONS",
   "title": "BPO Abstract Operations Catalogue",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license_note": "Operations are abstract kinds of state change that BPO properties quantify over. Function signatures listed under each operation's `examples` are platform-specific illustrations and are explicitly non-normative — the ontology does NOT commit to maintaining function-level coverage. To prevent drift toward a function catalogue, every entry in `operations[]` must be grounded in at least one current BPO property's formalization (see `inclusion_bar`); candidates without grounding are held in `candidates_pending_grounding[]` and not part of the catalogue proper.",
   "inclusion_bar": "A candidate operation X qualifies for inclusion in operations[] iff (a) X is a distinct abstract kind of state change — not a path through Op-space, not a role/scope qualifier (subset-of-Op categorisations such as `privileged`, `valueMoving`, `Consequential`, `recovery`, `Internal` do NOT qualify), not a function-signature shorthand, and not an implementation detail; AND (b) at least one BPO property's formalization treats X differently from its neighbours — different guard, different effect on the state vocabulary, or different invariant clause. If two candidates always share guards, effects, and invariants across the entire corpus, they collapse into one.",
+  "size_guidance": "The catalogue should stay under 40 entries. The limit exists to prevent drift toward a function catalogue — it is a smell threshold prompting a review of whether the bar is still being applied, NOT a quota that overrides the bar. Raised from 30 to 40 during the lending-layer integration: the lending block admitted ten operations, and holding the earlier limit would have meant excluding two candidates (OP:FLASH-LOAN, OP:CREATE-LENDING-MARKET) that clear the bar on their merits, for arithmetic reasons alone. An operation excluded by the count rather than by the test is a signal that the count is wrong. If a future integration reaches 40, raise it again with a recorded rationale or consolidate — do not silently defer a qualifying candidate.",
 
   "operations": [
     {
@@ -340,6 +341,165 @@
         { "property": "BPO:0040", "note": "UPGRADE is itself a privileged operation; access-control correctness applies to the authorization of upgrade transitions. Partial — covers the auth aspect, not the layout-preservation invariant." }
       ],
       "notes": "BPO:0030's signature explicitly addresses upgrades (`refinement relation σ_v ⊑ σ_{v'} between successive layouts that keeps every previously-assigned slot fixed`)."
+    },
+
+    {
+      "id": "OP:SUPPLY-LIQUIDITY",
+      "name": "Supply Liquidity",
+      "definition": "Add a settlement asset to a lending instance's lendable pool in exchange for a claim on it.",
+      "state_change": "the creditor-side aggregate G_k(m) and the supplier's position P_k(m, u) both increase by the quotation of the supplied quantity; controlled balance increases by the observed delta.",
+      "examples": [
+        "supply(marketParams, assets, shares, onBehalf, data)",
+        "deposit(uint256 assets, address receiver)"
+      ],
+      "governs_properties": [
+        "BPO:0110",
+        { "property": "BPO:0111", "note": "The claim issued is a conversion whose direction must protect the pool; partial — governs the conversion at this call site, not the whole conversion family." },
+        { "property": "BPO:0120", "note": "The credited amount is the observed balance delta under the declared asset profile. Partial — the operation consumes the contract, it does not discharge it." }
+      ],
+      "notes": "Distinct from OP:DEPOSIT: DEPOSIT moves value across the system boundary without necessarily issuing a fungible claim on a lendable pool. BPO:0110's fold clause treats the creditor-side aggregate differently from a plain custody increase."
+    },
+    {
+      "id": "OP:WITHDRAW-LIQUIDITY",
+      "name": "Withdraw Liquidity",
+      "definition": "Redeem a claim on a lending instance's lendable pool for the underlying settlement asset.",
+      "state_change": "the creditor-side aggregate and the redeemer's position both decrease by the quotation of the redeemed claim; guarded by available liquidity, which is the pool balance net of outstanding liabilities.",
+      "examples": [
+        "withdraw(marketParams, assets, shares, onBehalf, receiver)",
+        "redeem(uint256 shares, address receiver, address owner)"
+      ],
+      "governs_properties": [
+        "BPO:0110",
+        "BPO:0117",
+        { "property": "BPO:0111", "note": "Redemption quotation direction; partial as for SUPPLY-LIQUIDITY." },
+        { "property": "BPO:0002", "note": "Partial — BPO:0002 is the fairness-conditional liveness claim over this operation; BPO:0117 is the strictly weaker enabledness claim, and the two must not be conflated." }
+      ],
+      "notes": "Distinct from OP:WITHDRAW by its liquidity guard: BPO:0117 names available liquidity as a declared precondition conjunct, which a plain custody withdrawal has no analogue for."
+    },
+    {
+      "id": "OP:POST-COLLATERAL",
+      "name": "Post Collateral",
+      "definition": "Place a settlement asset under an instance's control as security for a position's liabilities, without lending it.",
+      "state_change": "the position's collateral measure increases; collateral capacity C(m, u) increases under the declared valuation; the asset does not enter the lendable pool and generates no creditor-side claim.",
+      "examples": [
+        "supplyCollateral(marketParams, assets, onBehalf, data)"
+      ],
+      "governs_properties": [
+        "BPO:0110",
+        { "property": "BPO:0113", "note": "Risk-decreasing, so it carries no health post-condition of its own; it changes the capacity term the predicate reads. Partial." },
+        { "property": "BPO:0120", "note": "Custody of the posted asset under the declared movement profile. Partial." }
+      ],
+      "notes": "Kept separate from OP:SUPPLY-LIQUIDITY because BPO:0113 reads collateral through the capacity function C while BPO:0110 folds lendable claims through P_k — different effect, different governing clause. Kept separate from OP:ENCUMBER because encumbrance restricts disposal of an asset in place, whereas posting transfers custody."
+    },
+    {
+      "id": "OP:WITHDRAW-COLLATERAL",
+      "name": "Withdraw Collateral",
+      "definition": "Remove a settlement asset from an instance's control as security, releasing it to the position holder.",
+      "state_change": "the position's collateral measure and capacity C(m, u) both decrease; risk-increasing, so the health predicate must hold in the post-state.",
+      "examples": [
+        "withdrawCollateral(marketParams, assets, onBehalf, receiver)"
+      ],
+      "governs_properties": [
+        "BPO:0113",
+        "BPO:0117",
+        { "property": "BPO:0040", "note": "Delegated withdrawal must be evaluated for the position owner rather than the caller. Partial — the authority half only." }
+      ],
+      "notes": "One of the two risk-increasing operations BPO:0113's guarded post-condition quantifies over. Distinct from OP:WITHDRAW-LIQUIDITY: this reduces capacity, that reduces the creditor-side aggregate, and BPO:0113 treats only the former as risk-increasing."
+    },
+    {
+      "id": "OP:BORROW",
+      "name": "Borrow",
+      "definition": "Draw a settlement asset from a lending instance's pool against posted collateral, creating a liability.",
+      "state_change": "the debtor-side aggregate and the position's liability both increase by the quotation of the drawn quantity; pool liquidity decreases; risk-increasing, so the health predicate must hold in the post-state.",
+      "examples": [
+        "borrow(marketParams, assets, shares, onBehalf, receiver)"
+      ],
+      "governs_properties": [
+        "BPO:0113",
+        "BPO:0110",
+        { "property": "BPO:0111", "note": "The liability issued is a conversion rounded against the borrower. Partial." },
+        { "property": "BPO:0040", "note": "Delegated borrowing evaluated for the position owner. Partial." }
+      ],
+      "notes": "The canonical risk-increasing operation. BPO:0110's backing relation and BPO:0113's guarded post-condition both constrain it, and they constrain different things: one bounds aggregate liabilities against backing, the other bounds one position's liability against its capacity."
+    },
+    {
+      "id": "OP:REPAY",
+      "name": "Repay",
+      "definition": "Return a settlement asset to a lending instance to discharge a position's liability.",
+      "state_change": "the debtor-side aggregate and the position's liability both decrease by the quotation of the repaid quantity; pool liquidity increases; risk-decreasing.",
+      "examples": [
+        "repay(marketParams, assets, shares, onBehalf, data)"
+      ],
+      "governs_properties": [
+        "BPO:0110",
+        "BPO:0117",
+        { "property": "BPO:0111", "note": "Full-liability repayment must not leave a residual unit unrepayable through rounding. Partial — this is also the full-exit exactness clause of BPO:0117." }
+      ],
+      "notes": "Distinct from OP:SETTLE: settlement fixes an outcome as final and absorbing, whereas repayment reduces a continuing liability that may be re-incurred. BPO:0117 names it as an exit whose enabledness must follow from the declared precondition."
+    },
+    {
+      "id": "OP:ACCRUE-INTEREST",
+      "name": "Accrue Interest",
+      "definition": "Advance a lending instance's accounting to the current time measure, generating value over the elapsed interval and allocating it among claim classes.",
+      "state_change": "creditor-side and debtor-side aggregates both increase by the generated quantity per the declared accrual relation; a fee claim is issued from the allocation; the last-accrual marker advances to the current time measure.",
+      "examples": [
+        "accrueInterest(marketParams)",
+        "internal _accrueInterest invoked at the entry of every state-changing operation"
+      ],
+      "governs_properties": [
+        "BPO:0112",
+        { "property": "BPO:0110", "note": "The generated quantity must be applied to both sides or the fold breaks. Partial." },
+        { "property": "BPO:0122", "note": "The generated quantity is derived from an external rate call whose contract this operation consumes. Partial." },
+        { "property": "BPO:0101", "note": "Accrual is a sanctioned value-creating flow — the issuance term of the conservation equation. Partial." }
+      ],
+      "notes": "Admitted because BPO:0112's formalization gives it a guard (a non-zero elapsed interval not already consumed) and an effect (the declared accrual relation) that no other operation shares. It is the only operation in the catalogue whose effect is a function of elapsed time rather than of an actor's input."
+    },
+    {
+      "id": "OP:LIQUIDATE",
+      "name": "Liquidate",
+      "definition": "Discharge part or all of an ineligible position's liability by seizing its collateral, under a declared incentive and residual-loss policy.",
+      "state_change": "the position's liability and collateral both decrease; the liquidator's holding increases by the seized quantity plus the declared incentive; where collateral is exhausted before the liability, a residual is recognized against both sides of the backing relation.",
+      "examples": [
+        "liquidate(marketParams, borrower, seizedAssets, repaidShares, data)"
+      ],
+      "governs_properties": [
+        "BPO:0114",
+        "BPO:0115",
+        { "property": "BPO:0113", "note": "Eligibility is the complement of the health predicate under the same comparator. Partial — the boundary-agreement clause only." },
+        { "property": "BPO:0110", "note": "Settlement conservation and residual recognition are stated against the fold and backing relation. Partial." },
+        { "property": "BPO:0121", "note": "Eligibility and the incentive are computed under an external valuation. Partial — the interface contract, not the valuation's correctness." }
+      ],
+      "notes": "The only operation that moves value out of a position without its holder's consent, which is why four properties constrain it. BPO:0115 governs it only where the protocol exposes more than one input mode."
+    },
+    {
+      "id": "OP:FLASH-LOAN",
+      "name": "Flash Loan",
+      "definition": "Lend a settlement asset with control transferred to untrusted code before settlement, requiring repayment within the same atomic scope.",
+      "state_change": "controlled balance decreases and an explicit pending claim is created in one indivisible step; control transfers; a successful settlement consumes the claim exactly once and restores the balance, and any other path to a stable boundary fails.",
+      "examples": [
+        "flashLoan(address token, uint256 assets, bytes calldata data)"
+      ],
+      "governs_properties": [
+        "BPO:0116",
+        { "property": "BPO:0021", "note": "The exactly-once clause relies on a failed settlement leaving no partial consumption. Partial." },
+        { "property": "BPO:0020", "note": "Control transfer to untrusted code with system state mid-update. Partial — the call-site-consistency reading." },
+        { "property": "BPO:0110", "note": "The pending claim is what keeps the accounted obligation covered during the gap. Partial." }
+      ],
+      "notes": "BPO:0116's formalization gives it a guard and effect no other operation has: it is the only catalogue operation whose definition includes a control transfer to untrusted code between the state update and the settlement."
+    },
+    {
+      "id": "OP:CREATE-LENDING-MARKET",
+      "name": "Create Lending Instance",
+      "definition": "Instantiate a lending instance from an admitted parameter tuple, fixing its immutable projection at creation.",
+      "state_change": "a new instance exists with imm(m) fixed; every bounded parameter is set within its declared domain; admission is evaluated against current registry contents rather than a snapshot.",
+      "examples": [
+        "createMarket(MarketParams memory marketParams)"
+      ],
+      "governs_properties": [
+        "BPO:0118",
+        { "property": "BPO:0040", "note": "Where creation is permissioned, the authority relation applies. Partial — many designs make creation permissionless and gate only the registries it draws from." }
+      ],
+      "notes": "BPO:0118's admission and immutability clauses treat it as a distinct kind of state change: it is the only operation that brings an instance into existence, and the only one after which the immutable projection may never change."
     }
   ],
 
