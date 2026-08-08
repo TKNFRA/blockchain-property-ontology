@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bpo.spec/schema/assurance-case.schema.json",
+  "title": "BPO Assurance-Case Cross-Walk",
+  "description": "Canonical record for one verification project's alignment against the BPO catalogue. This schema is PUBLISHED BY BPO but INSTANTIATED DOWNSTREAM: a crosswalk is an artifact of the verification project that produced the evidence, and it points *up* at the ontology. BPO therefore hosts this contract and a synthetic fixture, but hosts no real case study — a catalogue that carried one subject's evidence would invert the dependency. The schema's purpose is to make it structurally impossible to launder a local tool result into an ontology-level verification claim: `proof_transfer` is pinned to `none`, evidence CLASS is recorded separately from the CLAIMS made about it (so `schema/validate_refs.py` can cross-check them), and the declared ledger/summary counts are recomputed from the data at build time. Nothing in this schema may be specific to any one protocol, tool, or project.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["assurance_case", "local_ledger", "alignment_summary", "assumptions", "alignments"],
+  "properties": {
+    "assurance_case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "version", "subject", "bpo_baseline"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$", "description": "Stable handle for this crosswalk release, e.g. 'example-lending-b-0-1-0'." },
+        "title": { "type": "string" },
+        "version": { "type": "string", "description": "SemVer of this crosswalk document, independent of both the subject's version and the BPO baseline." },
+        "subject": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name"],
+          "properties": {
+            "name": { "type": "string", "description": "The system under verification. Free text: this schema takes no position on what kind of system it is." },
+            "revision": { "type": "string", "description": "Exact pinned revision of the subject the evidence was produced against. Without this, no result in the document is reproducible." },
+            "source_url": { "type": "string" }
+          }
+        },
+        "bpo_baseline": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["revision"],
+          "properties": {
+            "revision": { "type": "string", "description": "Exact BPO revision the alignment was decided against. Alignment decisions are only meaningful relative to a corpus snapshot; a later BPO change becomes an explicit crosswalk delta rather than a silent reinterpretation." },
+            "property_count": { "type": "integer", "minimum": 0, "description": "Size of the BPO corpus at that revision, recorded so a reviewer can tell whether 'no exact match' meant 24 records or 240." }
+          }
+        },
+        "produced_by": { "type": "array", "items": { "type": "string" } },
+        "created": { "type": "string", "format": "date" },
+        "notes": { "type": "string" }
+      }
+    },
+
+    "local_ledger": {
+      "type": "object",
+      "description": "Author-DECLARED sizes of the local obligation and assumption ledgers. schema/validate_refs.py RECOMPUTES both from the arrays below and fails the build on disagreement, so a truncated or padded document cannot pass silently.",
+      "additionalProperties": false,
+      "required": ["property_count", "assumption_count"],
+      "properties": {
+        "property_count": { "type": "integer", "minimum": 0 },
+        "assumption_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+
+    "alignment_summary": {
+      "type": "object",
+      "description": "Author-DECLARED alignment histogram, likewise recomputed and cross-checked by the validator. Declaring it is what makes the headline claim ('N scoped, M partial, K unmatched') auditable rather than prose.",
+      "additionalProperties": false,
+      "required": ["scoped_instantiation", "partial_overlap", "no_exact_match"],
+      "properties": {
+        "scoped_instantiation": { "type": "integer", "minimum": 0 },
+        "partial_overlap": { "type": "integer", "minimum": 0 },
+        "no_exact_match": { "type": "integer", "minimum": 0 }
+      }
+    },
+
+    "assumptions": {
+      "type": "array",
+      "description": "The verification project's own assumption ledger. Every assumption an alignment entry leans on must be declared here; the validator enforces that closure. This is the local mirror of BPO's own first-class `assumptions` discipline.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "statement"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+$", "description": "Local assumption identifier. The pattern is deliberately generic — no project's prefix is baked into this contract. Uniqueness is enforced in code, not by this pattern." },
+          "family": { "type": "string", "description": "Grouping label, e.g. an interface class, an execution platform, or a bounded-model family." },
+          "statement": { "type": "string" },
+          "discharged_by": { "type": ["string", "null"], "description": "External artifact or BPO id discharging this assumption. `null` is meaningful: an explicitly accepted but undischarged hypothesis." }
+        }
+      }
+    },
+
+    "alignments": {
+      "type": "array",
+      "description": "One entry per local obligation. The entry records where the local predicate sits relative to the BPO catalogue, what evidence exists for it locally, and — critically — what the alignment does NOT transfer.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["local_id", "alignment", "proof_transfer"],
+        "properties": {
+          "local_id": { "type": "string", "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+$" },
+          "local_name": { "type": "string" },
+
+          "alignment": {
+            "enum": ["scoped-instantiation", "partial-overlap", "no-exact-match"],
+            "description": "`scoped-instantiation`: the local predicate instantiates one expressly identified BPO clause under stated symbol bindings and assumptions. `partial-overlap`: local and BPO records share a security intent or facet, but neither semantically covers the other. `no-exact-match`: the BPO baseline has no record with the required semantics. The enum deliberately offers no value meaning 'equivalent to' or 'proves' — those readings belong to the core relationship DAG, which a crosswalk does not earn."
+          },
+
+          "bpo_targets": {
+            "type": "array",
+            "description": "BPO records this entry aligns to. Must be empty when `alignment` is `no-exact-match` (that is the whole content of the claim) and non-empty otherwise.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["property"],
+              "properties": {
+                "property": { "type": "string", "pattern": "^BPO:[0-9]{4,}$" },
+                "clause": { "type": "string", "description": "The exact generic clause instantiated. Required for a scoped instantiation: 'this property, somewhere' is not a scoped claim." },
+                "note": { "type": "string" }
+              }
+            }
+          },
+
+          "symbol_bindings": {
+            "type": "array",
+            "description": "Binds each generic parameter the aligned clause quantifies over to its local realization. This is what makes a scoped instantiation checkable rather than asserted.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["generic", "local"],
+              "properties": {
+                "generic": { "type": "string", "description": "Symbol as named in the BPO record's `formalization.symbols`." },
+                "local": { "type": "string", "description": "The local model's realization of it." },
+                "note": { "type": "string" }
+              }
+            }
+          },
+
+          "covered_clauses": { "type": "array", "items": { "type": "string" } },
+          "uncovered_clauses": { "type": "array", "items": { "type": "string" }, "description": "Clauses of the target record this entry does NOT establish. Recording the residual is the point; an entry that lists none is claiming total coverage and should be read sceptically." },
+          "residual_scope": { "type": "string", "description": "Prose statement of what remains outside this entry's scope." },
+
+          "local_assumptions": { "type": "array", "items": { "type": "string" }, "description": "Ids resolving into this document's own `assumptions[]`. Closure enforced by the validator." },
+
+          "evidence": {
+            "type": "object",
+            "description": "The local executable result, if any. `class` states the KIND of evidence obtained; the three claim fields state what is being ASSERTED about its reach. Keeping them separate is what lets the validator reject the common overstatements (operation-local checking reported as reachable, static assertions reported as transition-preserving, a curated trace reported as domain-exhaustive) mechanically instead of editorially.",
+            "additionalProperties": false,
+            "required": ["class", "result"],
+            "properties": {
+              "class": {
+                "enum": ["complete-finite-reachability", "temporal-product", "operation-local-cbc", "static-assertion", "curated-trace", "mutation-expected-fail", "none"],
+                "description": "The kind of evidence actually produced."
+              },
+              "result": { "enum": ["pass", "partial", "gap", "expected-fail"] },
+              "grade": { "type": "string", "pattern": "^E[0-5]$", "description": "Project-local evidence grade. The scale's meaning is the project's to define; BPO only requires that one be stated." },
+              "machine": { "type": "string", "description": "The model / machine the result was obtained on." },
+              "tool": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "name": { "type": "string" },
+                  "version": { "type": "string" },
+                  "revision": { "type": "string" }
+                }
+              },
+              "bounds": { "type": "string", "description": "The finite bounds the result holds within. A bounded result reported without its bounds is not a result." },
+              "artifact": { "type": "string", "description": "Location of the evidence artifact." },
+              "reachability_claim": {
+                "enum": ["exhaustive", "bounded", "none"],
+                "description": "Whether the state space was covered exhaustively (within bounds), only partially, or not explored at all. Must not be `exhaustive` when `class` is `operation-local-cbc`: constraint-based checking of one operation says nothing about reachability of the states it was checked over."
+              },
+              "transition_preservation": { "type": "boolean", "description": "Whether the result establishes that the property is preserved by transitions. Must be false when `class` is `static-assertion`: an assertion over a state enumeration is not an inductive step." },
+              "domain_exhaustive": { "type": "boolean", "description": "Whether the result covers the whole declared domain. Must be false when `class` is `curated-trace`: a hand-built trace demonstrates reachability of one behaviour, never absence of others." },
+              "reproducible": { "type": "boolean", "description": "Whether the cited artifact actually resolves and the result re-derives from it. Recording `false` honestly is the intended use; omitting the field to avoid saying so is not." }
+            }
+          },
+
+          "proof_transfer": {
+            "const": "none",
+            "description": "Pinned by schema. An alignment is a semantic mapping, not a refinement proof: it does not transfer a local model-checking result onto the generic BPO record, prove that record, or establish an unbounded claim about a deployed system. Should an independent refinement artifact ever exist, it would be a separate record type — not a relaxation of this field."
+          },
+
+          "review_caveat": { "type": "string", "description": "Any independent-review finding qualifying this entry — e.g. a property found unfalsifiable under the chosen bounds, or a result that did not reproduce. A caveat recorded here is expected to be reflected in `evidence.result`, not to contradict it." }
+        }
+      }
+    }
+  }
+}

@@ -27,8 +27,25 @@ BPO corpus validator.  Fails (exit 1) on:
     links from property records: a block tagged `out-of-scope` must carry zero links and a block
     tagged `behavioural` must carry at least one, so the scope verdict cannot drift out of sync
     with the actual links
+  - any protocol-identity token (protocol name, source revision, deployment address, local
+    obligation id, fixed policy constant) appearing in a NORMATIVE field of a property record;
+    the token list and the checked/excluded field scope live in
+    schema/protocol-identity.denylist.json
+  - any assurance-case cross-walk document failing schema/assurance-case.schema.json or one of
+    the eight honesty gates: local-id uniqueness; declared-vs-recomputed ledger sizes; closure of
+    bpo_targets into the corpus and of local_assumptions into the document's own ledger; scoped
+    instantiations supplying clause + bindings + residual (and no-exact-match supplying no
+    target); a passing result carrying machine/tool/bounds/assumptions/artifact; evidence CLASS
+    consistent with the CLAIMS made about it (operation-local CBC is not exhaustive reachability,
+    a static assertion is not transition preservation, a curated trace is not domain-exhaustive);
+    no referenced property having been advanced to formally-verified; and the declared alignment
+    histogram matching the recomputed one
 ATK: targets are treated as an EXTERNAL namespace (the threat-class registry)
 and are reported but not required to resolve yet.
+Assurance-case documents are OPTIONAL: BPO publishes the contract and a synthetic fixture but
+hosts no real case study, because a crosswalk is an artifact of the verification project that
+produced the evidence. Closure runs one-directionally FROM a crosswalk INTO the corpus; no
+property record ever points back at a verification project.
 Also prints the assumption-discharge ledger and basic graph stats.
 """
 import json, glob, sys, os, re, collections
@@ -315,6 +332,48 @@ else:
 
 
 # ---------------------------------------------------------------------------
+# Section 0e — Assurance-case cross-walk documents.
+#
+# BPO publishes schema/assurance-case.schema.json as a contract for downstream
+# verification projects and ships a synthetic fixture under examples/ so the
+# honesty gates are exercised in CI.  It hosts no real case study: a crosswalk
+# belongs to the project that produced the evidence, and carrying one here
+# would invert the dependency.  Documents are therefore OPTIONAL — finding none
+# is a skip, not a failure.  Shape is checked here; the eight gates run in
+# Section 2d, after the property corpus has been indexed.
+# ---------------------------------------------------------------------------
+print("\n== assurance-case documents ==")
+ac_schema_path = f"{ROOT}/schema/assurance-case.schema.json"
+ac_docs = {}
+if not os.path.exists(ac_schema_path):
+    fail = True
+    print("  FAIL  missing schema/assurance-case.schema.json")
+else:
+    ac_schema = json.load(open(ac_schema_path, encoding="utf-8"))
+    candidates = sorted(
+        glob.glob(f"{ROOT}/examples/*assurance-case*.json")
+        + glob.glob(f"{ROOT}/case-studies/*.json")
+    )
+    if not candidates:
+        print("  OK   schema present; no assurance-case documents in this repo (expected: "
+              "crosswalks live in the verification projects that produce the evidence)")
+    for f in candidates:
+        doc = json.load(open(f, encoding="utf-8"))
+        rel = os.path.relpath(f, ROOT).replace("\\", "/")
+        shape_errs = list(Draft202012Validator(ac_schema).iter_errors(doc))
+        if shape_errs:
+            fail = True
+            print(f"  FAIL  {rel} does not conform to assurance-case.schema.json:")
+            for e in shape_errs[:10]:
+                print("       ->", list(e.path), e.message)
+        else:
+            ac_docs[rel] = doc
+            print(f"  OK   shape  {rel}  "
+                  f"({len(doc.get('alignments', []))} alignments, "
+                  f"{len(doc.get('assumptions', []))} assumptions)")
+
+
+# ---------------------------------------------------------------------------
 # Section 1 — schema validation of property records
 # ---------------------------------------------------------------------------
 print("\n== schema ==")
@@ -443,6 +502,204 @@ if not (oos_with_links or beh_without_links):
 
 
 # ---------------------------------------------------------------------------
+# Section 2c — protocol-identity denylist over NORMATIVE property fields.
+#
+# A BPO record states a behavioural truth over abstract sorts, functions and
+# policy parameters; concrete protocol identity belongs to a downstream
+# assurance-case crosswalk.  This gate makes that rule machine-checked.  The
+# checked/excluded field scope is documented in the denylist file itself:
+# cross-walk surfaces (identifiers.*), illustrative threat material
+# (attack_surface[]), attribution (provenance.*) and prover names
+# (verification.strategies[].tools) are all deliberately out of scope.
+# ---------------------------------------------------------------------------
+def normative_strings(p):
+    """Yield (field_path, text) for every string in a property record's normative fields."""
+    def walk(node, path):
+        if isinstance(node, str):
+            yield path, node
+        elif isinstance(node, list):
+            for i, v in enumerate(node):
+                yield from walk(v, f"{path}[{i}]")
+        elif isinstance(node, dict):
+            for k, v in sorted(node.items()):
+                yield from walk(v, f"{path}.{k}")
+
+    yield from walk(p.get("descriptions", {}), "descriptions")
+    # formalization minus `bindings`: those are ISO 20022 cross-walk notes, an
+    # excluded cross-walk surface like identifiers.*.
+    yield from walk({k: v for k, v in p.get("formalization", {}).items() if k != "bindings"},
+                    "formalization")
+    for i, a in enumerate(p.get("assumptions", [])):
+        if isinstance(a.get("statement"), str):
+            yield f"assumptions[{i}].statement", a["statement"]
+    yield from walk(p.get("enforcement", {}), "enforcement")
+    ver = p.get("verification", {})
+    for i, s in enumerate(ver.get("strategies", [])):
+        for k in ("approach", "notes"):          # NOT `tools` — prover names are not protocol identity
+            if isinstance(s.get(k), str):
+                yield f"verification.strategies[{i}].{k}", s[k]
+    yield from walk(ver.get("testability", []), "verification.testability")
+
+
+def term_regex(term):
+    """Whole-token, case-insensitive, whitespace-tolerant match for a denied term."""
+    return re.compile(
+        r"(?<![A-Za-z0-9])" + r"\s+".join(re.escape(w) for w in term.split()) + r"(?![A-Za-z0-9])",
+        re.IGNORECASE,
+    )
+
+
+print("\n== protocol-identity denylist (normative fields) ==")
+denylist_path = f"{ROOT}/schema/protocol-identity.denylist.json"
+if not os.path.exists(denylist_path):
+    fail = True
+    print("  FAIL  missing schema/protocol-identity.denylist.json")
+else:
+    denylist  = json.load(open(denylist_path, encoding="utf-8"))
+    allowed   = {(a.get("property"), a.get("term")) for a in denylist.get("allowlist", [])}
+    terms     = [(t["term"], t.get("kind", "?"), term_regex(t["term"]))
+                 for t in denylist.get("denied_terms", [])]
+    patterns  = [(pt.get("kind", "?"), re.compile(pt["pattern"]))
+                 for pt in denylist.get("denied_patterns", [])]
+    deny_hits = 0
+    for p in props.values():
+        for path, text in normative_strings(p):
+            for term, kind, rx in terms:
+                if rx.search(text) and (p["id"], term) not in allowed:
+                    fail = True; deny_hits += 1
+                    print(f"  FAIL  {p['id']} {path}: denied {kind} '{term}'")
+            for kind, rx in patterns:
+                m = rx.search(text)
+                if m and (p["id"], m.group(0)) not in allowed:
+                    fail = True; deny_hits += 1
+                    print(f"  FAIL  {p['id']} {path}: denied {kind} '{m.group(0)}'")
+    if not deny_hits:
+        print(f"  OK   {len(props)} records clean over {len(terms)} denied terms + "
+              f"{len(patterns)} denied patterns ({len(allowed)} allowlisted exception(s))")
+
+
+# ---------------------------------------------------------------------------
+# Section 2d — assurance-case honesty gates.
+#
+# Closure runs one-directionally FROM a crosswalk INTO the corpus.  The gates
+# exist so that a local, bounded, tool-specific result cannot be reported as
+# something stronger than it is, and so that an alignment cannot quietly
+# promote itself into a proof about a generic record.
+# ---------------------------------------------------------------------------
+print("\n== assurance-case gates ==")
+by_id = {p["id"]: p for p in props.values()}
+if not ac_docs:
+    print("  OK   no assurance-case documents to gate")
+for rel, doc in ac_docs.items():
+    errs = []
+    alignments = doc.get("alignments", [])
+    local_assumption_ids = [a["id"] for a in doc.get("assumptions", [])]
+
+    # Gate 1 — local identifiers unique within the document.
+    dupes = [i for i, n in collections.Counter(
+        a["local_id"] for a in alignments).items() if n > 1]
+    if dupes:
+        errs.append(f"duplicate local_id(s): {sorted(dupes)}")
+    dupe_asm = [i for i, n in collections.Counter(local_assumption_ids).items() if n > 1]
+    if dupe_asm:
+        errs.append(f"duplicate assumption id(s): {sorted(dupe_asm)}")
+
+    # Gate 2 — declared ledger sizes match the data.
+    ledger = doc.get("local_ledger", {})
+    if ledger.get("property_count") != len(alignments):
+        errs.append(f"local_ledger.property_count={ledger.get('property_count')} "
+                    f"but {len(alignments)} alignments present")
+    if ledger.get("assumption_count") != len(local_assumption_ids):
+        errs.append(f"local_ledger.assumption_count={ledger.get('assumption_count')} "
+                    f"but {len(local_assumption_ids)} assumptions present")
+
+    known_assumptions = set(local_assumption_ids)
+    for a in alignments:
+        lid   = a["local_id"]
+        kind  = a["alignment"]
+        tgts  = a.get("bpo_targets", [])
+        ev    = a.get("evidence", {})
+
+        # Gate 3 — closure, both directions of reference.
+        for t in tgts:
+            if t["property"] not in ids:
+                errs.append(f"{lid}: bpo_target {t['property']} does not resolve in the corpus")
+        for aid in a.get("local_assumptions", []):
+            if aid not in known_assumptions:
+                errs.append(f"{lid}: local_assumption {aid} not in this document's ledger")
+
+        # Gate 4 — the alignment class must be backed by the structure it claims.
+        if kind == "scoped-instantiation":
+            if not tgts:
+                errs.append(f"{lid}: scoped-instantiation with no bpo_targets")
+            if not all(t.get("clause") for t in tgts):
+                errs.append(f"{lid}: scoped-instantiation without an identified clause on every target")
+            if not a.get("symbol_bindings"):
+                errs.append(f"{lid}: scoped-instantiation without symbol_bindings")
+            if not a.get("residual_scope"):
+                errs.append(f"{lid}: scoped-instantiation without residual_scope")
+        elif kind == "partial-overlap":
+            if not tgts:
+                errs.append(f"{lid}: partial-overlap with no bpo_targets")
+        elif kind == "no-exact-match" and tgts:
+            errs.append(f"{lid}: no-exact-match must carry zero bpo_targets, found {len(tgts)}")
+
+        # Gate 5 — a reported pass must be reproducible on its face.
+        if ev.get("result") == "pass":
+            for field in ("machine", "bounds", "artifact"):
+                if not ev.get(field):
+                    errs.append(f"{lid}: evidence.result=pass without evidence.{field}")
+            if not ev.get("tool", {}).get("name"):
+                errs.append(f"{lid}: evidence.result=pass without evidence.tool.name")
+            if not a.get("local_assumptions"):
+                errs.append(f"{lid}: evidence.result=pass without local_assumptions")
+
+        # Gate 6 — evidence CLASS must be consistent with the CLAIMS made about it.
+        cls = ev.get("class")
+        if cls == "operation-local-cbc" and ev.get("reachability_claim") == "exhaustive":
+            errs.append(f"{lid}: operation-local CBC claims exhaustive reachability "
+                        f"(constraint-checking one operation says nothing about reachability)")
+        if cls == "static-assertion" and ev.get("transition_preservation"):
+            errs.append(f"{lid}: static assertion claims transition preservation "
+                        f"(an assertion over a state enumeration is not an inductive step)")
+        if cls == "curated-trace" and ev.get("domain_exhaustive"):
+            errs.append(f"{lid}: curated trace claims domain exhaustiveness "
+                        f"(a hand-built trace shows one behaviour is reachable, never that others are absent)")
+        if cls == "none" and ev.get("result") == "pass":
+            errs.append(f"{lid}: evidence.class=none reported as a pass")
+
+        # Gate 7 — no referenced property may have been advanced to verified.
+        for t in tgts:
+            target = by_id.get(t["property"])
+            if target and target.get("provenance", {}).get("confidence") == "formally-verified":
+                errs.append(f"{lid}: target {t['property']} is marked formally-verified; "
+                            f"an alignment must not promote a generic record")
+
+    # Gate 8 — declared alignment histogram matches the recomputed one.
+    computed = collections.Counter(a["alignment"] for a in alignments)
+    declared = doc.get("alignment_summary", {})
+    for key, field in (("scoped-instantiation", "scoped_instantiation"),
+                       ("partial-overlap",      "partial_overlap"),
+                       ("no-exact-match",       "no_exact_match")):
+        if declared.get(field) != computed.get(key, 0):
+            errs.append(f"alignment_summary.{field}={declared.get(field)} "
+                        f"but {computed.get(key, 0)} entries are '{key}'")
+
+    if errs:
+        fail = True
+        print(f"  FAIL  {rel}")
+        for e in errs[:20]:
+            print(f"       -> {e}")
+        if len(errs) > 20:
+            print(f"       -> ... and {len(errs) - 20} more")
+    else:
+        print(f"  OK   {rel}  all 8 gates pass "
+              f"({computed.get('scoped-instantiation', 0)} scoped / "
+              f"{computed.get('partial-overlap', 0)} partial / "
+              f"{computed.get('no-exact-match', 0)} unmatched)")
+
+
+# ---------------------------------------------------------------------------
 # Section 3 — undischarged assumptions ledger  (unchanged)
 # ---------------------------------------------------------------------------
 print("\n== undischarged assumptions (accepted hypotheses) ==")
@@ -473,5 +730,15 @@ print(f"  IOF framework:        {len(iof_ids)} ids "
       f"out-of-scope={sum(1 for s in iof_bb_scope.values() if s == 'out-of-scope')})")
 
 
-print("\nRESULT:", "FAIL" if fail else "PASS (DAG closed over BPO: namespace; DASCP / Operations / ISO 20022 / IOF frameworks integral and closed)")
+print(f"  Assurance-case documents:  {len(ac_docs)}")
+for rel, doc in ac_docs.items():
+    hist = collections.Counter(a["alignment"] for a in doc.get("alignments", []))
+    print(f"    - {rel}: {len(doc.get('alignments', []))} alignments "
+          f"({hist.get('scoped-instantiation', 0)} scoped, "
+          f"{hist.get('partial-overlap', 0)} partial, "
+          f"{hist.get('no-exact-match', 0)} unmatched), "
+          f"{len(doc.get('assumptions', []))} local assumptions")
+
+
+print("\nRESULT:", "FAIL" if fail else "PASS (DAG closed over BPO: namespace; DASCP / Operations / ISO 20022 / IOF frameworks integral and closed; normative fields free of protocol identity; assurance-case gates satisfied)")
 sys.exit(1 if fail else 0)

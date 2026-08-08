@@ -1,0 +1,57 @@
+{
+  "$id": "https://bpo.spec/schema/protocol-identity.denylist.json",
+  "title": "Protocol-Identity Denylist for Normative Property Fields",
+  "version": "0.1.0",
+  "description": "A BPO property record states a behavioural truth over abstract sorts, functions, transition classes, and policy parameters. Concrete protocol identity — an implementation's name, a source revision, a deployment address, a local obligation id, or a fixed policy constant — belongs to a downstream assurance-case crosswalk (schema/assurance-case.schema.json), never to the record itself. This file is the data behind that rule; schema/validate_refs.py enforces it as a build gate so genericity is machine-checked rather than promised in review.",
+
+  "rationale": "The gate matters most where there is no case study in-repo to absorb specifics. Without it, the pressure to write down 'the' rounding direction, 'the' health comparator, or 'the' virtual-share offset that a particular study happened to verify is unopposed, and a reusable record silently becomes a description of one deployment. A denied term is not a claim the concept is unimportant — it is a claim the concept is a PARAMETER the record must declare and a specialization must bind.",
+
+  "scope": {
+    "checked_fields": [
+      "descriptions.*",
+      "formalization.* (all subfields, including signature, symbols, first_order_logic, temporal_logic.*, hoare[].*, state_machine, type_theoretic, algebraic, hyperproperty)",
+      "assumptions[].statement",
+      "enforcement.*",
+      "verification.strategies[].approach",
+      "verification.strategies[].notes",
+      "verification.testability[]"
+    ],
+    "excluded_fields": [
+      { "field": "identifiers.*", "why": "Cross-walk and provenance surface by design. External registry ids (CWE/SWC/EIP/ERC) are exactly what belongs here." },
+      { "field": "attack_surface[]", "why": "Illustrative threat material, explicitly non-normative. BPO:0101 legitimately cites the ERC-4626 vault inflation-attack class here." },
+      { "field": "provenance.*", "why": "Attribution of where an abstraction came from is scholarship, not a semantic commitment. Kept generic by authoring convention rather than by this gate." },
+      { "field": "verification.strategies[].tools", "why": "Tool names (Certora, Echidna, ProB, Foundry) are not protocol identity. Naming the prover that checks a property does not make the property about one deployment." }
+    ]
+  },
+
+  "denied_terms": [
+    { "term": "morpho",        "kind": "protocol-name" },
+    { "term": "aave",          "kind": "protocol-name" },
+    { "term": "makerdao",      "kind": "protocol-name" },
+    { "term": "uniswap",       "kind": "protocol-name" },
+    { "term": "sushiswap",     "kind": "protocol-name" },
+    { "term": "fraxlend",      "kind": "protocol-name" },
+    { "term": "compound finance", "kind": "protocol-name", "note": "Phrase-scoped deliberately: bare `compound` is ordinary vocabulary in a lending-accrual record ('compound interest') and denying it would be a false positive." },
+    { "term": "compound v2",   "kind": "protocol-name" },
+    { "term": "compound v3",   "kind": "protocol-name" },
+    { "term": "curve finance", "kind": "protocol-name", "note": "Phrase-scoped: bare `curve` is ordinary mathematical vocabulary." },
+    { "term": "euler finance", "kind": "protocol-name", "note": "Phrase-scoped: bare `euler` is ordinary mathematical vocabulary." },
+
+    { "term": "wad",    "kind": "fixed-constant", "note": "A specific fixed-point scale. A generic record declares a scale parameter; it does not pick 18 decimals." },
+    { "term": "ray",    "kind": "fixed-constant", "note": "As above, for 27-decimal fixed point." },
+    { "term": "taylor", "kind": "fixed-constant", "note": "A specific accrual approximation scheme. BPO:0112 declares an approximation relation as a parameter; selecting a third-order Taylor expansion is a specialization's choice." },
+    { "term": "10^6",   "kind": "fixed-constant", "note": "A specific virtual-share offset. BPO:0111 declares the offset as a policy parameter." },
+    { "term": "1e6",    "kind": "fixed-constant" },
+    { "term": "1e18",   "kind": "fixed-constant" }
+  ],
+
+  "denied_patterns": [
+    { "pattern": "(?<![0-9a-zA-Z])[0-9a-f]{40}(?![0-9a-zA-Z])", "kind": "source-revision", "note": "A 40-hex git revision. Pinning a subject revision is the crosswalk's job." },
+    { "pattern": "0x[0-9a-fA-F]{40}(?![0-9a-fA-F])",            "kind": "deployment-address" },
+    { "pattern": "(?<![A-Za-z0-9])MB-[A-Z]",                     "kind": "local-obligation-id", "note": "Local obligation and assumption identifiers from a downstream verification project." }
+  ],
+
+  "allowlist": [],
+
+  "allowlist_policy": "An entry here is an admission that a denied token appears legitimately in a normative field. Add one only with a stated reason, and prefer rewriting the field. Narrowing `denied_terms` to make a hit disappear defeats the gate; recording the exception keeps it visible."
+}
