@@ -2,7 +2,7 @@
 
 ## Collateralized-Lending Property Layer + Assurance-Case Contract — 2026-08-08
 
-Added a protocol-agnostic layer of **13 property records** for collateralized lending (10 guarantees, 3 dependency contracts), **10 abstract operations**, and a published **assurance-case schema** — the contract a downstream verification project's cross-walk must satisfy — with a synthetic fixture and eight machine-enforced honesty gates. Two new build gates make the layer's central claims structural rather than editorial: a protocol-identity denylist over property records' normative fields, and evidence class-versus-claim consistency in the assurance-case layer. The corpus grows from 24 to 37 records and the operations catalogue from 22 to 32; no existing record changed meaning, no id was reused, and no relationship-edge type was invented. The validator reports `PASS`. **Not committed** — staged for maintainer review.
+Added a protocol-agnostic layer of **13 property records** for collateralized lending (10 guarantees, 3 dependency contracts), **10 abstract operations**, and a published **assurance-case schema** — the contract a downstream verification project's cross-walk must satisfy — with a synthetic fixture and eight machine-enforced honesty gates. Two new build gates make the layer's central claims structural rather than editorial: a protocol-identity denylist over property records' normative fields, and evidence class-versus-claim consistency in the assurance-case layer. The corpus grows from 24 to 37 records and the operations catalogue from 22 to 32; no existing record changed meaning, no id was reused, and no relationship-edge type was invented. The validator reports `PASS`. **Merged to `master`** — four commits, each independently validated, CI green.
 
 The work derives from an external proposal that also specified a Morpho Blue case-study cross-walk. That cross-walk is **deliberately excluded**; see the design decisions below.
 
@@ -138,9 +138,11 @@ Baseline for comparison: 24 properties, 22 operations, 35 `governs_properties` e
 
 Every gate was negative-tested: each was mutated to violate its clause, the validator confirmed to exit 1 with the specific message, and the fixture restored. All 8 assurance-case gates fire (13 mutation cases including the schema-pinned `proof_transfer`), and the denylist was checked against both false negatives (protocol names, revisions, addresses, local ids, fixed constants) and false positives ("compound interest", "capacity curve", "Euler-Maclaurin", prover names). A gate that has never been seen to fail is not known to work.
 
-### Not committed
+### Landed
 
-Staged for maintainer review. No branch pushed, no pull request opened.
+Merged to `master` as four commits — assurance-case schema and gates, the thirteen property records, the operations layer, and this documentation. Each was checked out in isolation and confirmed to leave `schema/validate_refs.py` at `PASS`, so the history is bisectable rather than only green at the tip. CI (`validate-catalogue`, Python 3.12, `jsonschema` only) passes on the merged head.
+
+This departs from the staging convention the three integrations below record. Those were held for maintainer review before landing; this one was reviewed and merged in the same pass.
 
 ## IOF Interoperability Framework Cross-Walk — 2026-05-22
 
