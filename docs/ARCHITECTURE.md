@@ -30,17 +30,22 @@ This is an early **seed**: the meta-architecture plus a set of fully-worked prop
   CONTRIBUTING.md                    quality bar, review lifecycle, provenance
   schema/
     property.schema.json             JSON Schema 2020-12 for one property record
+    assurance-case.schema.json       contract for a downstream verification project's cross-walk
+    protocol-identity.denylist.json  tokens barred from a record's normative fields
     relationship.vocab.json          formal semantics of the typed DAG edges
     context.jsonld                   JSON-LD @context: JSON -> RDF (SKOS/OWL) projection
-    validate_refs.py                 CI gate: schema + cross-framework closure + ledger
+    validate_refs.py                 CI gate: schema + cross-framework closure + ledger + gates
+  examples/
+    assurance-case.example.json      synthetic fixture exercising the eight honesty gates
   ontology/
     axes.md                          the five orthogonal classification axes
     taxonomy.skos.ttl                SKOS poly-hierarchy of the domain axis (DAG)
-  properties/                        24 records, DAG closed over the BPO: namespace
+  properties/                        37 records, DAG closed over the BPO: namespace
     BPO-0001-no-unauthorized-mint.json         safety / invariant      (SMT-tractable)
     BPO-0002-eventual-withdrawal.json          conditional liveness    (model-checking/ITP)
     BPO-0003-zero-knowledge.json               hyperproperty           (reduction/ITP)
     BPO-0020-reentrancy-safety.json            safety + 2-safety       (atomicity)
+    BPO-0021-atomic-failure-rollback.json      safety                  (failure edges = identity)
     BPO-0030-storage-layout-isolation.json     safety                  (separation logic)
     BPO-0040-access-control-correctness.json   safety                  (reference monitor)
     BPO-0041-multiparty-transaction-validation safety                  (k-of-n threshold)
@@ -61,6 +66,18 @@ This is an early **seed**: the meta-architecture plus a set of fully-worked prop
     BPO-0093-encumbrance-pre-settlement.json   safety                  (encumbrance partition)
     BPO-0101-conservation-of-value.json        economic root invariant (Certora/Echidna)
     BPO-0102-cross-ledger-inventory-consistency safety (joint-state)   (Σ_L supply_L)
+    BPO-0110-lending-ledger-consistency        safety / lending root   (fold + backing relation)
+    BPO-0111-directed-position-unit-conversion safety + 2-safety       (self-composition round trip)
+    BPO-0112-lending-accrual-and-fee-allocation safety                 (independent post-state formula)
+    BPO-0113-collateralized-position-health    safety                  (guarded post-condition)
+    BPO-0114-liquidation-accounting-and-loss   safety                  (four-clause settlement)
+    BPO-0115-alternative-liquidation-mode      k-safety                (relational, conditional)
+    BPO-0116-callback-settlement-integrity     safety                  (linear claim, temporal product)
+    BPO-0117-conditional-position-exit         conditional enabledness (bounded CTL, NOT liveness)
+    BPO-0118-protocol-instance-configuration   safety                  (frame + admission + domain)
+    BPO-0120-asset-interface-accounting        ASSUMPTION node         (null discharge)
+    BPO-0121-valuation-provider-interface      ASSUMPTION node         (null discharge)
+    BPO-0122-rate-provider-call-integrity      ASSUMPTION node         (null discharge)
   mappings/
     dascp.framework.json             DTCC/Clearstream/Euroclear control framework (P/R/C)
     dascp.framework.schema.json      JSON Schema for the DASCP catalogue
@@ -116,7 +133,7 @@ The opaque, immutable `BPO:NNNN` identifiers exist precisely so these references
 
 Beyond the property layer itself, the catalogue carries two additive layers under `mappings/` that close it to the standards world without diluting the property-level core:
 
-- **Operations** (`mappings/operations.catalogue.json`) — a small (≤30), bounded set of *abstract operations*: TRANSFER, MINT, BURN, PAUSE, SETTLE, COMPENSATE, ENCUMBER, … Each operation is one *kind of state change*, grounded in at least one BPO property's formalization. The inclusion bar gates entries: a candidate qualifies only if it is a distinct kind of state change *and* at least one current property's formalization treats it differently from its neighbours. Function signatures appear only as *non-normative* examples; the ontology does not commit to maintaining function-level coverage. Each operation carries optional `iso20022_intents` (ISO 20022 message ids whose business intent the operation realizes) and `governs_properties` (BPO ids whose formalizations govern it). The operations↔properties link lives one-directionally inside the catalogue file — closure runs from `mappings/` into the property corpus — so adding or removing an operation touches one file, not all 24 property records.
+- **Operations** (`mappings/operations.catalogue.json`) — a small (≤40), bounded set of *abstract operations*: TRANSFER, MINT, BURN, PAUSE, SETTLE, COMPENSATE, ENCUMBER, BORROW, LIQUIDATE, ACCRUE-INTEREST, … Each operation is one *kind of state change*, grounded in at least one BPO property's formalization. The inclusion bar gates entries: a candidate qualifies only if it is a distinct kind of state change *and* at least one current property's formalization treats it differently from its neighbours. The size ceiling is a smell threshold prompting a review of whether the bar is still being applied, **not a quota** — it was raised from 30 to 40 when the lending layer landed, because holding it would have excluded two candidates that clear the bar on their merits, and an operation excluded by the count rather than by the test is evidence the count is wrong. The number and its rationale live in the catalogue's `size_guidance` field alongside `inclusion_bar`, so they travel together. Function signatures appear only as *non-normative* examples; the ontology does not commit to maintaining function-level coverage. Each operation carries optional `iso20022_intents` (ISO 20022 message ids whose business intent the operation realizes) and `governs_properties` (BPO ids whose formalizations govern it). The operations↔properties link lives one-directionally inside the catalogue file — closure runs from `mappings/` into the property corpus — so adding or removing an operation touches one file, not all 24 property records.
 
 - **ISO 20022 binding, two depths** (`mappings/iso20022.framework.json`) — a minimal subset of ISO 20022 messages, components, and elements that BPO properties or operations actually reference, with paraphrased descriptions in our own words. ISO 20022 publishes identifiers and structure free-of-use via iso20022.org, so the catalogue mirrors only what it needs and cites the source. **Depth 1**: `identifiers.external_refs.iso20022` on a property points at a message / business component, qualified `relates-to` (general relevance) or `constrains` (the property places a behavioural constraint on operations of that type). **Depth 2**: `formalization.bindings` maps a *named symbol from the property's formalization* (declared in `formalization.symbols` when present, otherwise whole-token-matched against `formalization.signature`) to an ISO 20022 element. The depth-2 symbol check is structured-lookup-when-available, regex-on-`signature`-only as fallback, case-sensitive throughout — a binding that silently mis-resolves would be worse than no binding.
 
@@ -162,6 +179,28 @@ To make this honesty *structural* rather than editorial, the IOF framework file 
 
 Of the 9 behavioural blocks, 5 carry a single `supports`-grade link to the BPO property that materially *is* the block's behavioural backbone (BB-cross-dlt-protocols and BB-asset-location-controls → BPO:0102 cross-ledger inventory consistency; BB-consensus-and-finality → BPO:0090 settlement-finality irrevocability; BB-data-privacy → BPO:0075 private-data confidentiality hyperproperty; BB-roles-in-data-access → BPO:0040 access-control correctness). The remaining links sit at `partially-supports`, with `note` fields stating both the behavioural slice covered and the surrounding dimension that stays out-of-scope. The full coverage report and its inverted "what is deliberately not covered" section live in [`mappings/IOF-coverage.md`](../mappings/IOF-coverage.md). The integration is additive: no property record's meaning changed, no `BPO:` id was reused or renumbered, no new relationship-edge type was invented, and the validator continues to report `PASS` on the final corpus.
 
+## The assurance-case layer: evidence without proof transfer
+
+The catalogue states behavioural truths over abstract sorts, functions and policy parameters. A *verification project* states something different and much more specific: that a named model, under named bounds and named assumptions, produced a named result about a named revision of a real system. Both are valuable, and conflating them manufactures assurance out of nothing. The assurance-case layer is the joint between them, and it is built so the joint cannot be crossed accidentally.
+
+**BPO publishes the contract and hosts no case study.** `schema/assurance-case.schema.json` defines what a cross-walk from a verification project to this catalogue must look like; the cross-walk itself belongs to the project that produced the evidence, and lives in that project's repository. This direction is not a matter of tidiness. A cross-walk points *up* at the ontology and is indexed by two revisions — the subject's and BPO's — so hosting one here would make the catalogue carry one subject's evidence, and would invert a dependency that must run the other way. `examples/assurance-case.example.json` is a synthetic fixture with an invented subject; it exists so the gates below are exercised in CI, and it is not a case study.
+
+**The alignment vocabulary is deliberately not a `relationships[]` edge type.** The core DAG's `refines`, `implies` and `equivalentTo` carry proof-theoretic meaning defined in `relationship.vocab.json` — a `refines` edge asserts a semantic containment someone is expected to have checked. A cross-walk earns none of that. Its three values are `scoped-instantiation` (the local predicate instantiates one expressly identified clause under stated bindings), `partial-overlap` (shared intent, neither covers the other), and `no-exact-match` (the catalogue has no record with the required semantics). There is deliberately no value meaning "equivalent to" or "proves", and `proof_transfer` is pinned by schema to `none`: an alignment does not transfer a local model-checking result onto a generic record, prove that record, or establish an unbounded claim about a deployed system.
+
+**Eight gates make the honesty structural rather than editorial**, in the same spirit as the IOF bidirectional scope-link check. Beyond identifier uniqueness and reference closure, `validate_refs.py` requires that declared ledger sizes and the declared alignment histogram match what the data actually contains; that a scoped instantiation names its clause, its symbol bindings and its residual; that a reported pass carries its machine, tool, bounds, assumptions and artifact; that no referenced property has been advanced to `formally-verified`; and — the load-bearing three — that the *class* of evidence is consistent with the *claims* made about it:
+
+| Evidence class | Claim it may not make | Why |
+|---|---|---|
+| `operation-local-cbc` | `reachability_claim: exhaustive` | Constraint-checking one operation says nothing about which of those states are reachable. |
+| `static-assertion` | `transition_preservation: true` | An assertion over a state enumeration is not an inductive step. |
+| `curated-trace` | `domain_exhaustive: true` | A hand-built trace shows one behaviour is reachable, never that others are absent. |
+
+Each of these corresponds to a real way a bounded result gets over-reported, and each fails the build rather than a review.
+
+**The same discipline runs in the other direction**, from the ontology outward. `schema/protocol-identity.denylist.json` bars protocol names, source revisions, deployment addresses, local obligation identifiers and fixed policy constants from a property record's *normative* fields — `descriptions`, `formalization`, `assumptions[].statement`, `enforcement`, and the prose of `verification.strategies`. Cross-walk surfaces, illustrative threat material, provenance and prover names are explicitly out of scope, so a record may still cite ERC-4626 as an attack class or name Certora as a tool. The gate matters most because there is no case study here to absorb specifics: without it, the pressure to write down *the* rounding direction or *the* health comparator that one study happened to verify is unopposed, and a reusable record quietly becomes a description of one deployment. A denied term is never a claim the concept is unimportant — it is a claim the concept is a **parameter** the record must declare and a specialization must bind.
+
+**The RDF projection is deferred, not forgotten.** `schema/context.jsonld` does not project `external_refs` today and does not project this layer either. Emitting a non-entailing alignment link into the same graph as entailing `refines`/`implies` edges is the one way this integration could become unsound, and it is not worth doing until the projection can mark the distinction — a `bpo:alignsWith` term with no transitive semantics, or an equivalent.
+
 ## Validation
 
 ```
@@ -171,7 +210,7 @@ s=json.load(open('schema/property.schema.json')); v=V(s); \
 [print(f, 'OK' if not list(v.iter_errors(json.load(open(f)))) else 'FAIL') \
  for f in glob.glob('properties/*.json')]"
 ```
-`schema/validate_refs.py` runs the full check and reports `PASS` when every property conforms to the schema; every `BPO:` reference resolves to a record; the DASCP, operations, ISO 20022, and IOF framework files each pass their own shape and internal-integrity checks (id uniqueness, intra-framework closure including IOF's `building_block.foundation` closure); every cross-framework reference resolves (`external_refs.dascp[].id`, `external_refs.iso20022[].id`, `external_refs.iof[].id` resolving to behavioural building blocks, operations' `iso20022_intents`, operations' `governs_properties`); the depth-2 ISO 20022 binding satisfies both the element-side closure and the symbol-in-formalization check (Tier 1 structured lookup against `formalization.symbols` when present, Tier 2 whole-token regex against `formalization.signature` as fallback, case-sensitive); and the IOF cross-walk layer satisfies the bidirectional scope-link consistency check (out-of-scope blocks carry zero cross-walk links; behavioural blocks carry at least one).
+`schema/validate_refs.py` runs the full check and reports `PASS` when every property conforms to the schema; every `BPO:` reference resolves to a record; the DASCP, operations, ISO 20022, and IOF framework files each pass their own shape and internal-integrity checks (id uniqueness, intra-framework closure including IOF's `building_block.foundation` closure); every cross-framework reference resolves (`external_refs.dascp[].id`, `external_refs.iso20022[].id`, `external_refs.iof[].id` resolving to behavioural building blocks, operations' `iso20022_intents`, operations' `governs_properties`); the depth-2 ISO 20022 binding satisfies both the element-side closure and the symbol-in-formalization check (Tier 1 structured lookup against `formalization.symbols` when present, Tier 2 whole-token regex against `formalization.signature` as fallback, case-sensitive); the IOF cross-walk layer satisfies the bidirectional scope-link consistency check (out-of-scope blocks carry zero cross-walk links; behavioural blocks carry at least one); every property record's normative fields are free of protocol-identity tokens per `schema/protocol-identity.denylist.json`; and every assurance-case document present passes all eight honesty gates (assurance-case documents are optional — finding none is a skip, not a failure).
 
 ## Direction
 
@@ -184,3 +223,5 @@ This is an early seed. The catalogue is being actively expanded across domains, 
 - Label hyperproperties honestly; do not promise single-trace verification for them.
 - Every `guarantee` must enumerate its `assumptions`; every `assumption` should eventually gain a `discharged_by` or be explicitly accepted (`null` + a provenance note).
 - Mark unverified incident references `UNVERIFIED`/`VERIFY` and keep `provenance.confidence` honest; do not advance to `reviewed` with unverified attack citations.
+- Keep normative fields free of protocol identity. If a concrete choice feels necessary to state the property, it is a **parameter**: declare it in `formalization.signature` and let a specialization bind it. `schema/protocol-identity.denylist.json` enforces this, and narrowing the denylist to make a hit disappear defeats the point — record an allowlist entry with its reasoning instead.
+- A record with `deontic_role: assumption` describes something the catalogue *relies on*, not something it establishes. Its own `assumptions[]` should carry `discharged_by: null` so they surface in the undischarged ledger. `BPO:0074` and `BPO:0120`–`BPO:0122` are the worked examples.

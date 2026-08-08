@@ -1,5 +1,147 @@
 # Changelog
 
+## Collateralized-Lending Property Layer + Assurance-Case Contract — 2026-08-08
+
+Added a protocol-agnostic layer of **13 property records** for collateralized lending (10 guarantees, 3 dependency contracts), **10 abstract operations**, and a published **assurance-case schema** — the contract a downstream verification project's cross-walk must satisfy — with a synthetic fixture and eight machine-enforced honesty gates. Two new build gates make the layer's central claims structural rather than editorial: a protocol-identity denylist over property records' normative fields, and evidence class-versus-claim consistency in the assurance-case layer. The corpus grows from 24 to 37 records and the operations catalogue from 22 to 32; no existing record changed meaning, no id was reused, and no relationship-edge type was invented. The validator reports `PASS`. **Not committed** — staged for maintainer review.
+
+The work derives from an external proposal that also specified a Morpho Blue case-study cross-walk. That cross-walk is **deliberately excluded**; see the design decisions below.
+
+### Design decisions recorded
+
+- **No case study lands in this repository.** A cross-walk is an artifact of the verification project that produced the evidence: it points *up* at the catalogue and is indexed by two revisions (the subject's and BPO's). Hosting one here would invert the dependency and make a general catalogue carry one subject's evidence. BPO publishes `schema/assurance-case.schema.json` and a synthetic fixture; a real cross-walk lives in the project that cites it. *Rejected alternative:* a `case-studies/` directory with a populated 53-entry Morpho Blue cross-walk and a `build_crosswalk.py` generator, as the source proposal specified.
+- **Everything lands in canonical directories, not an `upstream/` staging tree.** The source proposal was written as though submitting to a third party; there is no upstream. Repo precedent records staging status in this changelog ("*Not committed — staged for maintainer review*"), and files under `upstream/` would be invisible to the validator and CI.
+- **`BPO:0021` for Atomic Failure Rollback, not `BPO:0119`.** The proposal placed it in the lending block. It is a platform-level execution guarantee that lending records *depend on* rather than a lending property, so it takes the execution decade beside `BPO:0020` reentrancy, matching the decade convention every existing record follows. It carries both `guarantee` and `environmental-assumption` deontic roles, because the same statement is an obligation for a system emulating rollback and an assumption for one running on a platform that provides it.
+- **`BPO:0119` is permanently unallocated.** The nine remaining lending guarantees shifted down one slot to `BPO:0110`–`BPO:0118`. Per the authoring rules, a retired or skipped id is never reused.
+- **The operations size guidance moved from 30 to 40 rather than the operations moving.** The lending layer admits 10 operations, taking the catalogue to 32. Under the old ceiling, two candidates that clear the inclusion bar on their merits — `OP:FLASH-LOAN` and `OP:CREATE-LENDING-MARKET` — would have been excluded for arithmetic reasons, which the source proposal acknowledged and accepted. An operation excluded by the count rather than by the test is evidence the count is wrong. The bar's *test* is unchanged; only the numeric guidance moved, and it now lives in the catalogue's new `size_guidance` field so the number and its rationale travel together.
+- **The three dependency contracts are `assumption` nodes, not guarantees.** `BPO:0120`–`BPO:0122` describe what a lending system *relies on* from an external asset interface, valuation provider and rate provider. Their own assumptions carry `discharged_by: null` so they surface in the undischarged ledger. Labelling them guarantees would let a consuming system's proof appear to establish something about a dependency it never examined — the composition error `docs/ARCHITECTURE.md` warns about.
+- **`BPO:0121` refuses to conflate interface well-formedness with economic correctness.** A valuation provider returning a well-formed, fresh, in-range value may still be manipulated, and no interface check excludes that. The boundary is stated four redundant ways — as a normative clause in the formalization, as an explicitly *non*-mitigated attack class, as a verification strategy with a deliberately empty tool list, and as an undischarged economic assumption — because collapsing it is the most common route by which a verified lending system acquires an unverified dependency nobody tracks.
+- **`BPO:0115` is `k-safety` and kept separate from `BPO:0114`.** Liquidation-mode coherence relates two executions from a shared pre-state; liquidation safety is single-trace and applies to every design. Merging them would either impose a vacuous obligation on single-mode protocols or invite a per-mode single-trace result to be reported as covering a relational claim. `BPO:0115` also imposes no obligation where only one input mode exists, and says so.
+- **`BPO:0117` is `guarantee-liveness-conditional`, and its LTL field states that no LTL formula covers it.** Bounded enabledness (`AG(Pre -> EX exit)`) is routinely produced by model checkers and routinely over-reported as withdrawal liveness. The `refinedBy` edge from `BPO:0002` says explicitly that `BPO:0117` is strictly weaker and is not evidence for it.
+- **Five false equivalences are recorded as edge notes in the data**, not only in prose: state typing is not compiler arithmetic preservation (`BPO:0060`); within-system custody is not cross-ledger inventory consistency (`BPO:0102`); synchronous rollback is not delayed compensating settlement (`BPO:0091`); bounded enabledness is not eventual withdrawal (`BPO:0002`); and a post-callback storage cutoff covers only part of reentrancy safety (`BPO:0020`, now refined by `BPO:0021` for atomicity and `BPO:0116` for call-site consistency).
+- **Protocol identity is barred from normative fields by a build gate, not by review.** With no case study here to absorb specifics, this lint is the only mechanism keeping the 13 records generic. Scope is `descriptions`, all of `formalization`, `assumptions[].statement`, `enforcement`, and the prose of `verification.strategies`. Deliberately excluded: `identifiers` and `attack_surface` (cross-walk and illustrative material — `BPO:0101` legitimately cites ERC-4626), `provenance` (attribution is scholarship), and `verification.strategies[].tools` (Certora and Echidna are prover names, not protocol identity). Terms are phrase-scoped where a bare token would false-positive: `compound finance` rather than `compound`, since "compound interest" is ordinary vocabulary in an accrual record; likewise `curve finance` and `euler finance`. All 24 pre-existing records pass with **zero allowlist entries**.
+- **Evidence class is recorded separately from the claims made about it.** The source proposal's requirements 8–10 were review obligations; they are now schema fields the validator cross-checks, so `operation-local-cbc` cannot claim exhaustive reachability, `static-assertion` cannot claim transition preservation, and `curated-trace` cannot claim domain exhaustiveness.
+- **Declared counts are recomputed rather than trusted.** The proposal hard-coded a requirement that a specific 17/28/8 alignment split stay reproducible. Generalized: a document declares its own `local_ledger` sizes and `alignment_summary` histogram, and the validator recomputes both from the data and fails on disagreement. This is project-independent and strictly stronger than checking one project's numbers.
+- **The assurance-case local-id pattern is generic.** The proposal's schema baked in an `MB-` prefix from one project. A reusable contract cannot carry one subject's identifier scheme, so the pattern is `^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+$` with uniqueness enforced in code.
+- **Alignment is not a `relationships[]` edge type.** `refines`, `implies` and `equivalentTo` carry proof-theoretic meaning defined in `relationship.vocab.json`; a cross-walk earns none of it. The alignment enum offers no value meaning "equivalent to" or "proves", and `proof_transfer` is pinned to `none` by schema rather than by convention.
+- **Assurance-case documents are optional.** Finding none is a skip, not a failure — the expected state for this repository, which hosts the contract and not a case study.
+- **`defi-lending` gains its first users.** The slug has existed in `ontology/taxonomy.skos.ttl` since the seed and was used by no record. `classification.domains` has no enum and no closure check, so no schema or taxonomy change was needed.
+
+### Files added (16)
+
+| File | What |
+|---|---|
+| `properties/BPO-0021-atomic-failure-rollback.json` | safety; failure edges are identity on the persistent projection |
+| `properties/BPO-0110-lending-ledger-consistency.json` | safety; aggregate fold + backing relation — the lending root |
+| `properties/BPO-0111-directed-position-unit-conversion-safety.json` | safety + k-safety; approximation contract + round-trip bound |
+| `properties/BPO-0112-lending-accrual-and-fee-allocation-consistency.json` | safety; generated value bounds the fee |
+| `properties/BPO-0113-collateralized-position-health-preservation.json` | safety; guarded post-condition on risk-increasing transitions |
+| `properties/BPO-0114-liquidation-accounting-and-loss-allocation-safety.json` | safety; eligibility, bounds, settlement conservation, residual |
+| `properties/BPO-0115-alternative-liquidation-mode-coherence.json` | k-safety; conditional on multiple input modes existing |
+| `properties/BPO-0116-callback-settlement-integrity.json` | safety; pending claim consumed exactly once |
+| `properties/BPO-0117-conditional-position-exit-enabledness.json` | conditional enabledness; explicitly weaker than `BPO:0002` |
+| `properties/BPO-0118-protocol-instance-configuration-integrity.json` | safety; admission, immutability, monotone registries, bounds |
+| `properties/BPO-0120-asset-interface-accounting-semantics.json` | ASSUMPTION node; declared movement profile |
+| `properties/BPO-0121-valuation-provider-interface-integrity.json` | ASSUMPTION node; well-formedness, *not* economic correctness |
+| `properties/BPO-0122-rate-provider-call-integrity.json` | ASSUMPTION node; termination, range, input fidelity, frame |
+| `schema/assurance-case.schema.json` | the cross-walk contract, instantiated downstream |
+| `schema/protocol-identity.denylist.json` | tokens barred from normative fields, with scope and rationale |
+| `examples/assurance-case.example.json` | synthetic fixture covering every alignment value and evidence class |
+
+### Files modified (9)
+
+| File | Change |
+|---|---|
+| `schema/validate_refs.py` | new Sections 0e (document shape), 2c (denylist lint), 2d (eight gates); extended stats and docstring |
+| `mappings/operations.catalogue.json` | +10 operations (22 → 32); new `size_guidance` field; version 0.1.0 → 0.2.0 |
+| `mappings/operations.catalogue.schema.json` | `size_guidance` added to the top-level shape |
+| `mappings/OPERATIONS-coverage.md` | regenerated: 32 ops, 70 links; lending sub-tables; candidate-count drift corrected |
+| `properties/BPO-0101-conservation-of-value.json` | +4 `refinedBy` edges, making good on its own provenance note about future lending children |
+| `properties/BPO-0020-reentrancy-safety.json` | +2 `refinedBy` edges splitting the atomicity and call-site-consistency readings |
+| `properties/BPO-0040-access-control-correctness.json` | +2 `refinedBy` edges (configuration integrity; guard completeness) |
+| `properties/BPO-0002-eventual-withdrawal.json` | +1 `refinedBy` edge stating that `BPO:0117` is strictly weaker and not evidence for it |
+| `properties/BPO-0060-compiler-arithmetic-preservation.json` | +1 `composesWith` edge recording the state-typing false equivalence |
+
+`schema/context.jsonld` was **not** modified — see below.
+
+### New id schemes introduced
+
+| Namespace | Pattern | Examples | Permanence |
+|---|---|---|---|
+| (none) | — | — | The layer introduces **no new id namespace**. Property ids continue `BPO:NNNN`; operation ids continue `OP:*`. Local obligation and assumption identifiers in an assurance-case document belong to the verification project, are namespaced by that project, and are never minted here. |
+
+### Deliberately *not* changed
+
+- **`schema/context.jsonld`.** `external_refs` is not RDF-projected today, and this layer is not projected either. Emitting a non-entailing alignment link into the same graph as entailing `refines`/`implies` edges is the one way this integration could become unsound. Deferred until the projection can mark the distinction (a `bpo:alignsWith` term with no transitive semantics, or equivalent) — documented in `docs/ARCHITECTURE.md`, not silent.
+- **`ontology/taxonomy.skos.ttl`.** `defi-lending` already existed; no new concept was needed.
+- **`.github/workflows/validate.yml`.** No new dependency: the gates use only `json`, `re`, `glob` and the existing `jsonschema`.
+- **The meaning of any pre-existing record.** The nine edges added to five existing records are additive relationship links; no `descriptions`, `formalization`, or `classification` field of an existing record was touched.
+- **Any ISO 20022 intents for the lending operations.** The reference subset covers securities settlement and transfer messaging and has no collateralized-lending counterpart. Inventing one would be worse than an empty column; the gap is recorded in `OPERATIONS-coverage.md`.
+
+### Empirical grounding
+
+The abstraction derives from a collateralized-lending B-method verification study with 53 local obligations and 30 named assumptions. Against the 24-record baseline, that study's obligations aligned as 17 scoped instantiations, 28 partial overlaps, and 8 with no exact match. All eight gaps are now closed:
+
+| Baseline gap | Closed by |
+|---|---|
+| Instance lifecycle / creation admission | `BPO:0118` admission clause |
+| Exact interest accrual | `BPO:0112` exactness clause — post-state equals a declared relation |
+| Monotone instance time | `BPO:0112` time-monotonicity and no-repeated-interval clauses |
+| Valuation-shock reachability | `BPO:0113` non-vacuity obligation — the profile must admit reachable unhealthy states |
+| Liquidation input-mode coherence | `BPO:0115`, k-safety and conditional on the modes existing |
+| Instance-parameter immutability | `BPO:0118` immutability clause |
+| Fee cap | `BPO:0118` bounded-parameter clause (the domain bound) **and** `BPO:0112` fee bound (generated value bounds the fee) — two distinct clauses, neither implying the other |
+| Synchronous transaction rollback | `BPO:0021` |
+
+That grounding is recorded **here and nowhere else**. No property record names the study, its subject, or its revision: `provenance.sources` cites "a collateralized-lending B-method verification study" and the denylist gate would fail the build on anything more specific.
+
+### Final state (validator output)
+
+```
+== Operations catalogue ==
+  OK   32 OP ids unique
+  OK   operations -> ISO 20022 closure (12 iso20022_intents entries all resolve)
+  OK   operations -> properties closure (70 governs_properties entries all resolve)
+
+== assurance-case documents ==
+  OK   shape  examples/assurance-case.example.json  (8 alignments, 4 assumptions)
+
+== references ==
+  all BPO: / DASCP: / ISO 20022: / IOF: targets resolve
+
+== IOF scope-link consistency ==
+  OK   all 9 behavioural blocks carry >= 1 cross-walk link; all 20 out-of-scope blocks carry zero
+
+== protocol-identity denylist (normative fields) ==
+  OK   37 records clean over 17 denied terms + 3 denied patterns (0 allowlisted exception(s))
+
+== assurance-case gates ==
+  OK   examples/assurance-case.example.json  all 8 gates pass (3 scoped / 3 partial / 2 unmatched)
+
+== graph stats ==
+  properties: 37
+  edges by type: {'refines': 12, 'dependsOn': 48, 'composesWith': 45, 'mitigates': 97,
+                  'conflictsWith': 11, 'refinedBy': 13}
+  external ATK: targets referenced (Phase-2 registry): 88
+  Operations catalogue: 32 operations
+  Assurance-case documents:  1
+    - examples/assurance-case.example.json: 8 alignments (3 scoped, 3 partial, 2 unmatched),
+      4 local assumptions
+
+RESULT: PASS (DAG closed over BPO: namespace; DASCP / Operations / ISO 20022 / IOF frameworks
+        integral and closed; normative fields free of protocol identity; assurance-case gates
+        satisfied)
+```
+
+Baseline for comparison: 24 properties, 22 operations, 35 `governs_properties` entries, 18 undischarged assumptions, 134 relationship edges. Now: 37 properties, 32 operations, 70 `governs_properties` entries, 40 undischarged assumptions, 226 edges. The undischarged ledger grew by 22, of which 9 belong to the three dependency contracts (`BPO:0120` ×2, `BPO:0121` ×3, `BPO:0122` ×4). That growth is the intended result of making external reliance explicit, not a regression: a lending layer that added no undischarged assumptions would be claiming its dependencies come for free.
+
+### Gate verification
+
+Every gate was negative-tested: each was mutated to violate its clause, the validator confirmed to exit 1 with the specific message, and the fixture restored. All 8 assurance-case gates fire (13 mutation cases including the schema-pinned `proof_transfer`), and the denylist was checked against both false negatives (protocol names, revisions, addresses, local ids, fixed constants) and false positives ("compound interest", "capacity curve", "Euler-Maclaurin", prover names). A gate that has never been seen to fail is not known to work.
+
+### Not committed
+
+Staged for maintainer review. No branch pushed, no pull request opened.
+
 ## IOF Interoperability Framework Cross-Walk — 2026-05-22
 
 Cross-walked the **Interoperability Framework for Digital Asset Securities (IOF)** — DTCC, Clearstream, Euroclear, in collaboration with BCG, February 2026 — to the BPO catalogue. The IOF organizes interoperability into 5 foundations and 29 building blocks; BPO catalogues *behavioural* properties, so the cross-walk is dense exactly where the IOF describes provable on-chain behaviour (9 blocks) and empty everywhere else (20 blocks — legal/regulatory, data-harmonization, role/governance, operational/SLA — out-of-scope by design). The validator reports `PASS` on the final corpus (24 property records unchanged in meaning; IOF framework integral and closed; bidirectional scope-link consistency green). **Not committed** — staged for maintainer review.

@@ -46,6 +46,18 @@ If you want the design rationale behind the schema — the five classification a
 
 The catalogue is being actively expanded across domains. Direction is emerging, and is being shaped together with early contributors and partners.
 
+### Collateralized lending
+
+The catalogue carries a layer of reusable properties for collateralized lending systems: ledger fold consistency and the backing relation, directed conversion safety, accrual and fee allocation, position health, liquidation accounting and loss allocation, callback settlement, exit enabledness, and configuration integrity — plus three **dependency contracts** describing what a lending system assumes of an external asset interface, valuation provider, and rate provider.
+
+These records are parameterized rather than prescriptive. They declare *that* a rounding direction, a health comparator, an accrual relation or a backing relation must be stated and obeyed; they do not choose one. A share-based design, an index-based design, and a hybrid should all be able to specialize them without editing a semantic clause. The three dependency contracts are `assumption` nodes with undischarged assumptions, so a system built on them is visibly *conditionally* assured rather than assured.
+
+### Using BPO from a verification project
+
+BPO is designed to be cited by work that verifies real systems. [`schema/assurance-case.schema.json`](./schema/assurance-case.schema.json) is the contract for that citation: a machine-readable cross-walk recording, for each of a project's local obligations, whether it instantiates a specific BPO clause, partially overlaps one, or has no match in the catalogue — together with the symbol bindings, the residual scope, and the local evidence.
+
+The cross-walk lives **in the verification project**, not here. It points up at the catalogue and is indexed by two revisions, so hosting one in the catalogue would invert the dependency. What the schema guarantees is that the citation stays honest: `proof_transfer` is pinned to `none`, and the validator refuses documents where the class of evidence contradicts the claims made about it — operation-local checking reported as exhaustive reachability, a static assertion reported as transition preservation, a curated trace reported as domain-exhaustive. [`examples/assurance-case.example.json`](./examples/assurance-case.example.json) is a synthetic fixture showing the shape.
+
 ### Checking the catalogue
 
 ```bash
@@ -53,7 +65,7 @@ pip install jsonschema
 python3 schema/validate_refs.py
 ```
 
-The validator schema-checks every record, fails on any dangling relationship, prints the ledger of accepted (undischarged) assumptions, and reports `PASS` when the catalogue is internally consistent.
+The validator schema-checks every record, fails on any dangling relationship, refuses protocol-specific identity in a record's normative fields, runs the assurance-case honesty gates over any cross-walk document present, prints the ledger of accepted (undischarged) assumptions, and reports `PASS` when the catalogue is internally consistent.
 
 ## How to contribute
 
