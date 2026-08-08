@@ -1,0 +1,96 @@
+{
+  "id": "BPO:0110",
+  "slug": "lending-ledger-consistency",
+  "title": "Lending Ledger Consistency (Aggregate Folds and the Backing Relation)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["share-total consistency", "aggregate equals sum of positions", "lending solvency invariant", "no unbacked liability"],
+    "academic_terms": ["accounting invariant over a position map", "monoid fold consistency", "resource backing relation"],
+    "industry_terms": ["total shares equal sum of user shares", "borrows do not exceed supply", "market solvency"],
+    "external_refs": {
+      "dasp": ["DASP-3 Arithmetic (when caused by rounding drift in the fold)"],
+      "other": ["double-entry accounting invariants specialized to pooled lending"]
+    }
+  },
+  "classification": {
+    "modal_class": ["safety"],
+    "deontic_role": ["invariant", "guarantee"],
+    "domains": ["defi-lending", "defi", "contract", "application"],
+    "abstraction_levels": ["economic", "contract", "systemic"],
+    "verification_modalities": ["smt", "model-checking", "abstract-interpretation", "symbolic-execution", "fuzzing"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "Every declared aggregate ledger of a lending instance equals the fold of the individual positions it summarizes, and every liability the instance recognizes stays within the backing available to it. Both halves must be preserved by every successful transition, not merely hold at rest. The property is parameterized: which quantities are accounted, how positions are aggregated, what counts as backing, and how the two are ordered are all declared by a lending profile rather than fixed by this record.",
+    "system_theoretic": "For each accounted class k the profile supplies a commutative aggregation operator, a position map from instance and account to a quantity, and an aggregate map from instance to a quantity. The consistency requirement is that the aggregate map equals the fold of the position map over all accounts, for every accounted class and every instance. The backing requirement is a separate ordering constraint between a liability measure and an available-backing measure. Together they are a state predicate that must be inductive over the transition relation.",
+    "security": "This is the invariant an attacker breaks to extract value from a pooled lending instance. Its two halves fail differently. Fold consistency fails through rounding that does not conserve, through an update path that touches an aggregate without touching the corresponding position (or the reverse), and through a fee mechanism that issues claims no position accounts for. The backing relation fails through over-issuance of liabilities, through loss recognition that reduces one side but not the other, and through counting the same backing twice across instances. A fold that has drifted is also a silent precondition failure for every downstream conversion, health check, and liquidation computation.",
+    "execution_semantics": "Concretely tracked as relations between a stored aggregate counter and the sum over a position mapping, and between an outstanding-debt measure and a held-or-owed measure. Violations live in: update paths that mutate one side only; rounding applied independently to aggregate and position; loss or bad-debt recognition that is not applied symmetrically; and custody accounting that attributes the same held balance to more than one instance sharing a settlement asset.",
+    "formal_verification": "A 1-safety state invariant and the natural inductive hypothesis for a lending model. Prove the fold equality and the backing ordering hold in the initial state and are preserved by every operation. The fold is the expensive half under bounded checking because it quantifies over the account set; a finite account domain makes it decidable within bounds, and the bound must be reported with any result. Rounding-induced drift needs interval or abstract-interpretation reasoning rather than a single-state assertion."
+  },
+  "formalization": {
+    "signature": "Instances M; accounts U; accounted classes K; quantities Q_k with commutative aggregation oplus_k and identity e_k. Position map P_k : M x U -> Q_k. Aggregate map G_k : M -> Q_k. Liability measure Liability : M x State -> Q. Available backing AvailableBacking : M x State -> Q. Instance ordering preceq_m. Backing predicate Backed. Transition relation step.",
+    "symbols": ["M", "U", "K", "Q_k", "oplus_k", "e_k", "P_k", "G_k", "Liability", "AvailableBacking", "preceq_m", "Backed", "step", "State"],
+    "first_order_logic": "Fold consistency:  forall k in K, m in M, s . G_k(m, s) = FOLD_{oplus_k, u in U} P_k(m, u, s).\nBacking:  Backed(m, s)  ==  Liability(m, s) preceq_m AvailableBacking(m, s).\nPreservation:  forall m, s, s', o . step(o, s, s') and o succeeds  ->  ( ( forall k . G_k(m, s') = FOLD_{oplus_k, u in U} P_k(m, u, s') ) and Backed(m, s') ).\nProfile obligation: the treatment of reserves, external credit, insurance, and recognized loss inside AvailableBacking is declared, not assumed.",
+    "temporal_logic": {
+      "ltl": "G( foldConsistent and backed )",
+      "ctl": "AG( foldConsistent and backed )",
+      "fairness": "n/a — safety property"
+    },
+    "hoare": [
+      { "pre": "foldConsistent(k, m) and Backed(m)", "command": "any successful transition on m", "post": "foldConsistent(k, m) and Backed(m)" },
+      { "pre": "Backed(m) and loss L recognized on m", "command": "recognize(L)", "post": "Backed(m) and both sides of the backing relation reduced by the profile-declared allocation" }
+    ],
+    "state_machine": "Annotate each transition with its per-class effect on the aggregate and on each touched position. The property is that the two annotations agree under the aggregation operator on every successful edge, and that the backing ordering is re-established at the end of every edge.",
+    "type_theoretic": "Positions as a linear resource indexed by account; the aggregate is the type-level fold and a transition is a resource-preserving rearrangement. The backing relation is a refinement type on the liability quantity witnessed by the available-backing quantity.",
+    "algebraic": "(Q_k, oplus_k, e_k) is a commutative monoid; G_k is the monoid homomorphism induced by summing P_k over the account index. Successful transitions are endomorphisms commuting with that fold."
+  },
+  "relationships": [
+    { "type": "refines", "target": "BPO:0101", "note": "Specializes the generic conservation invariant to pooled lending by naming the position map, the aggregation operator, and the backing relation that generic conservation leaves undefined." },
+    { "type": "dependsOn", "target": "BPO:0120", "note": "The backing relation quantifies over balances held under an external asset interface; without that interface's accounting semantics the available-backing measure is not well-defined." },
+    { "type": "dependsOn", "target": "BPO:0040", "note": "Transitions that mutate aggregates directly (issuance, loss recognition, administrative correction) must be authority-gated." },
+    { "type": "conflictsWith", "target": "BPO:0102", "note": "Deliberate distinction: within-instance and cross-instance custody consistency inside one system is NOT the cross-ledger inventory consistency of BPO:0102, which relates representations across separate networked ledgers." },
+    { "type": "mitigates", "target": "ATK:unbacked-liability" },
+    { "type": "mitigates", "target": "ATK:aggregate-position-drift" },
+    { "type": "mitigates", "target": "ATK:rounding-drain" }
+  ],
+  "attack_surface": [
+    { "class": "aggregate-position-drift", "pattern": "an update path touches the aggregate without the matching position update, or applies rounding to each independently", "incident_refs": [], "notes": "Fold-consistency half. Compounds silently across many small operations." },
+    { "class": "unbacked-liability", "pattern": "liabilities are issued beyond available backing, or backing is reduced without a matching liability reduction", "incident_refs": [], "notes": "Backing half. The direct solvency failure." },
+    { "class": "asymmetric-loss-recognition", "pattern": "recognized loss reduces one side of the backing relation only", "incident_refs": [], "notes": "The profile must declare the allocation; an unstated allocation is where this hides." },
+    { "class": "shared-custody-double-count", "pattern": "one held balance is counted as backing for two instances sharing a settlement asset", "incident_refs": [], "notes": "Requires the available-backing measure to be defined per settlement asset, not per instance in isolation." }
+  ],
+  "observability": {
+    "events": ["position update events carrying both the delta and the resulting aggregate", "loss-recognition events", "issuance and redemption events"],
+    "metrics": ["aggregate minus fold of positions, per accounted class (must be the identity)", "available backing minus liability (must satisfy the declared ordering)", "cumulative rounding residual per class"],
+    "invariant_checkpoints": ["post-transition: fold equality per accounted class", "post-transition: backing ordering holds", "post-loss-recognition: both sides reduced per the declared allocation"],
+    "runtime_assertions": ["assert aggregate equals fold on every state-changing operation over a bounded account set", "assert the backing ordering before returning from any liability-increasing operation"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Inductive accounting invariant", "tools": ["SMT-backed verifiers", "Certora Prover", "Halmos"], "strength": "proof", "notes": "Prove fold consistency and the backing ordering are established initially and preserved by every operation. Quantification over the account set needs either an inductive ghost sum or a finite account domain." },
+      { "approach": "Complete finite reachability", "tools": ["explicit-state model checkers", "ProB"], "strength": "bounded-proof", "notes": "Exhaustive over a finite instance/account/quantity profile. The bound is part of the result: a bounded exhaustive check is not an unbounded proof." },
+      { "approach": "Invariant fuzzing", "tools": ["Echidna", "Foundry invariant tests"], "strength": "high-coverage-evidence", "notes": "Stateful handlers over random operation sequences asserting both halves. Finds drift that single-state assertions miss." },
+      { "approach": "Rounding-residual abstract interpretation", "tools": ["interval analysis", "ghost residual tracking"], "strength": "bounded-proof", "notes": "Bound cumulative fold drift attributable to rounding and prove it cannot be driven to a material value." }
+    ],
+    "testability": ["random operation sequences preserve fold equality per accounted class", "liabilities cannot be issued past the declared backing ordering", "loss recognition reduces both sides per the declared allocation", "no operation makes the aggregate and the position set disagree even transiently at a stable boundary"]
+  },
+  "enforcement": {
+    "runtime": ["update aggregate and position in a single indivisible step", "assert the backing ordering on every liability-increasing path", "recognize loss through one allocation routine rather than at each call site"],
+    "static": ["inductive invariant proofs in CI", "enumerate every write path to an aggregate and prove each has a matching position write", "prove the available-backing measure is defined per settlement asset"],
+    "design_patterns": ["one canonical position map and aggregate map per accounted class", "explicit declared backing relation including reserves and recognized loss", "conservative and consistent rounding direction shared by aggregate and position"]
+  },
+  "assumptions": [
+    { "kind": "tooling", "statement": "Arithmetic on accounted quantities is checked, so neither the fold nor the aggregate can wrap.", "discharged_by": "BPO:0060" },
+    { "kind": "trust", "statement": "Authorities able to mutate aggregates directly are correctly controlled.", "discharged_by": "BPO:0040" },
+    { "kind": "environmental", "statement": "Balances held under an external asset interface behave as the declared accounting semantics require.", "discharged_by": "BPO:0120" },
+    { "kind": "environmental", "statement": "A failed transition leaves the accounted projection unchanged, so partial folds are not observable.", "discharged_by": "BPO:0021" }
+  ],
+  "provenance": {
+    "authors": ["BPO seed"],
+    "created": "2026-08-08",
+    "confidence": "draft",
+    "sources": ["double-entry accounting invariants", "pooled-lending solvency invariant practice", "a collateralized-lending B-method verification study"],
+    "notes": "First record in the lending block and the one most others rest on. Deliberately parameterized over the aggregation operator and the backing relation so that share-based, index-based, and hybrid designs specialize it without editing the semantic clause. BPO:0101 names this record as one of its refinements."
+  }
+}

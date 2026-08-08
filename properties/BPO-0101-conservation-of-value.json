@@ -54,6 +54,10 @@
   },
   "relationships": [
     { "type": "refinedBy", "target": "BPO:0001", "note": "No-unauthorized-mint is the issuance leg of conservation (the m term is gated)." },
+    { "type": "refinedBy", "target": "BPO:0110", "note": "Lending ledger consistency specializes the accounting invariant to pooled lending, naming the position map, aggregation operator and backing relation that generic conservation leaves undefined." },
+    { "type": "refinedBy", "target": "BPO:0111", "note": "Directed conversion safety bounds the DIRECTION of the rounding residual; conservation bounds only its total. Neither implies the other." },
+    { "type": "refinedBy", "target": "BPO:0112", "note": "Accrual supplies the sanctioned value-creating term, and bounds the fee by what was actually generated." },
+    { "type": "refinedBy", "target": "BPO:0114", "note": "Liquidation supplies the loss-allocation term: a recognized loss is a sanctioned reduction rather than a conservation violation only when applied to both sides of the backing relation." },
     { "type": "composesWith", "target": "BPO:0020", "note": "Reentrancy is a principal mechanism that breaks conservation via double-spend." },
     { "type": "dependsOn", "target": "BPO:0040", "note": "Sanctioned flows (mint/burn/admin sweeps) must be access-controlled." },
     { "type": "mitigates", "target": "ATK:value-leak" },

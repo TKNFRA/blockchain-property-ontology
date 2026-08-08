@@ -1,0 +1,92 @@
+{
+  "id": "BPO:0021",
+  "slug": "atomic-failure-rollback",
+  "title": "Atomic Failure Rollback (Failed Execution Restores the Persistent Projection)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["all-or-nothing execution", "transaction atomicity", "revert semantics", "failure atomicity"],
+    "academic_terms": ["atomicity (ACID)", "failure atomicity", "recoverable transition system", "checkpoint/rollback recovery"],
+    "industry_terms": ["revert", "state rollback on failure", "no partial writes"],
+    "external_refs": {
+      "cwe": ["CWE-460 Improper Cleanup on Thrown Exception"],
+      "other": ["ACID atomicity (Haerder & Reuter, 1983)", "recovery-block and checkpointing literature"]
+    }
+  },
+  "classification": {
+    "modal_class": ["safety"],
+    "deontic_role": ["invariant", "guarantee", "environmental-assumption"],
+    "domains": ["contract", "execution", "evm", "application"],
+    "abstraction_levels": ["protocol", "contract", "systemic"],
+    "verification_modalities": ["model-checking", "smt", "symbolic-execution", "interactive-theorem-proving"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "An atomic execution either completes and commits every effect on the declared persistent projection of state, or fails and leaves that projection exactly as it was at entry. There is no observable intermediate outcome in which some effects persist and others do not. The guarantee is stated over a declared projection because not every part of a system's state is expected to roll back: gas or fee accounting, nonce advancement, and event or log emission may be deliberately excluded, and the property is only meaningful once that boundary is written down.",
+    "system_theoretic": "Let pi be a projection from full state onto the persistent fragment the property governs. An atomic execution is a compound transition from s with an outcome flag. The property is: if the outcome is failure, then pi(s') = pi(s). Equivalently, the failure edges of the transition relation are identity on pi, so the reachable set of the composed system is unchanged by any failing attempt. Nested atomic scopes require pi to be defined per scope, with an inner failure restoring the inner entry projection rather than the outermost one.",
+    "security": "Partial-effect execution is a general-purpose exploit primitive: an attacker forces a failure at a chosen point so that a credit persists while the matching debit does not, or a permission is granted while the check that would have revoked it is skipped. Systems that emulate rollback in application code — manual undo paths, compensating writes, error flags interpreted by callers — are where this fails in practice, because the undo path is itself unverified code that can be starved, reverted, or reentered. The property also underpins every guarantee that reasons only about successful transitions: without it, a proof about successful transitions says nothing about the state an attacker can actually reach.",
+    "execution_semantics": "On platforms with native transactional execution, a failed call unwinds the persistent store to a snapshot taken at the call boundary. Violations live in three places: state written through a channel the snapshot mechanism does not cover; a caller that swallows a failure signal and continues on the assumption that effects were undone when only the inner scope was; and cross-domain effects (messages already dispatched, external assets already moved) that the local snapshot cannot reach and that therefore must be excluded from the declared projection and handled by compensation instead.",
+    "formal_verification": "A 1-safety property over compound transitions and, on a platform that provides it natively, an assumption rather than an obligation — which is why the record carries both roles. Discharge is by one of: a proved platform semantics in which failure edges are identity on the persistent store; a bounded model-checking argument over an explicit snapshot/restore encoding; or, where rollback is emulated, an inductive proof that the undo path restores the entry projection on every failure branch. The last case is the expensive one and is where the obligation genuinely bites."
+  },
+  "formalization": {
+    "signature": "States State; atomic scopes Scope; persistent projection pi : State -> PState; compound execution step exec : Scope x State -> State x Outcome with Outcome = {commit, abort}; entry snapshot snap : Scope x State -> PState.",
+    "symbols": ["State", "PState", "Scope", "pi", "exec", "Outcome", "commit", "abort", "snap", "excluded"],
+    "first_order_logic": "Failure atomicity:  forall c, s, s', o . exec(c, s) = (s', o) and o = abort  ->  pi(s') = pi(s).\nSnapshot agreement:  forall c, s . snap(c, s) = pi(s).\nNested scopes:  forall c1, c2, s, s' . c2 nested-in c1 and exec(c2, s) = (s', abort)  ->  pi(s') = pi(s), independently of the outcome of c1.\nDeclared exclusion:  every state component not in the domain of pi is listed in `excluded` and carries no rollback claim.",
+    "temporal_logic": {
+      "ltl": "G( aborted -> persistentProjection = persistentProjectionAtEntry )",
+      "ctl": "AG( EX(abort) -> AX( aborted -> pi = pi_entry ) )",
+      "fairness": "n/a — safety property, no fairness assumption required"
+    },
+    "hoare": [
+      { "pre": "pi(s) = P", "command": "exec(c, s) with outcome abort", "post": "pi(s) = P" },
+      { "pre": "pi(s) = P and c2 nested in c1", "command": "exec(c2, s) with outcome abort", "post": "pi(s) = P and c1 may still commit" }
+    ],
+    "state_machine": "Annotate every compound transition with an outcome label. The property is that the sub-relation induced by abort-labelled transitions is the identity relation on the projected state space. Any abort edge that is not identity on pi is a counterexample.",
+    "type_theoretic": "Atomic execution as a scoped effect handler: the persistent store is threaded linearly and an abort discards the continuation's store, returning the captured entry store unchanged. Excluded components are typed as ambient (non-transactional) effects that the handler does not capture.",
+    "algebraic": "exec(-, s) restricted to abort outcomes is idempotent and equal to the identity on the PState quotient; commit outcomes generate the monoid of persistent updates. Rollback is the left inverse of the partial update accumulated within the scope."
+  },
+  "relationships": [
+    { "type": "refines", "target": "BPO:0020", "note": "Reentrancy safety has an atomicity reading and a call-site-consistency reading. This record isolates the atomicity half — the state cutoff on failure — and does not cover callback-boundary storage consistency, which stays with BPO:0020." },
+    { "type": "composesWith", "target": "BPO:0101", "note": "Conservation of value quantifies over successful transitions; without failure atomicity a failed attempt could leave a partial value delta that the conservation argument never examines." },
+    { "type": "conflictsWith", "target": "BPO:0091", "note": "Deliberate distinction, not a design tension to resolve: synchronous rollback within one atomic scope is NOT the delayed compensating settlement of BPO:0091. Compensation applies exactly where effects have escaped the projection and cannot be unwound." },
+    { "type": "mitigates", "target": "ATK:partial-state-commit" },
+    { "type": "mitigates", "target": "ATK:swallowed-failure" }
+  ],
+  "attack_surface": [
+    { "class": "partial-state-commit", "pattern": "execution fails after a credit is written but before the matching debit, leaving unbacked value", "incident_refs": [], "notes": "The canonical failure. Requires an effect channel outside the snapshot." },
+    { "class": "swallowed-failure", "pattern": "a caller catches an inner failure signal and proceeds as if the inner effects were undone at the outer scope", "incident_refs": [], "notes": "Nested-scope clause. The inner projection is restored; the outer is not." },
+    { "class": "emulated-undo-divergence", "pattern": "hand-written compensating logic does not exactly invert the forward path on some branch", "incident_refs": [], "notes": "Where rollback is emulated rather than native, the undo path is unverified code." },
+    { "class": "escaped-effect", "pattern": "an external asset movement or dispatched message has already left the domain the snapshot covers", "incident_refs": [], "notes": "Must be declared excluded and handled by compensation; silently assuming it rolls back is the bug." }
+  ],
+  "observability": {
+    "events": ["execution outcome (commit/abort) per atomic scope", "scope entry and exit markers"],
+    "metrics": ["count of aborted executions with non-empty persistent delta (must be zero)", "depth of nested scopes"],
+    "invariant_checkpoints": ["post-abort: projected state equals entry snapshot", "post-abort: declared excluded components are the only ones that differ"],
+    "runtime_assertions": ["assert projected-state hash unchanged across an aborted scope", "assert no write to a persistent component occurs after an abort signal"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Platform semantics discharge", "tools": ["interactive theorem provers", "mechanized execution semantics"], "strength": "proof", "notes": "Where the execution platform provides native transactional semantics, this record is discharged once for the platform and consumed as an assumption by every system on it. This is the cheap path and should be preferred." },
+      { "approach": "Snapshot/restore model checking", "tools": ["model checkers over explicit-state encodings"], "strength": "bounded-proof", "notes": "Encode the entry snapshot explicitly and check that every abort edge restores it. Bounded by state-space size; the bound must be reported with the result." },
+      { "approach": "Inductive proof of an emulated undo path", "tools": ["SMT-backed verifiers"], "strength": "proof", "notes": "Required only where rollback is emulated. Prove the undo path inverts the forward path on every failure branch, including branches that fail inside the undo path itself." }
+    ],
+    "testability": ["forced failure at each write point leaves the projected state at its entry value", "nested scope abort does not disturb the enclosing scope's committed effects", "declared excluded components are the complete set of components that survive an abort"]
+  },
+  "enforcement": {
+    "runtime": ["native transactional execution with an entry snapshot per scope", "fail closed: treat an unrecognized outcome as abort", "assert projected-state equality on the abort path"],
+    "static": ["enumerate every persistent write channel and prove it is covered by the snapshot", "prove no effect escapes the projection without appearing in the declared exclusion list"],
+    "design_patterns": ["declare the persistent projection and its exclusions explicitly", "prefer native atomicity over emulated undo", "isolate escaped effects behind a compensation boundary rather than assuming rollback"]
+  },
+  "assumptions": [
+    { "kind": "environmental", "statement": "The execution platform's failure path restores the persistent store it manages, and the boundary of what it manages is documented.", "discharged_by": null },
+    { "kind": "environmental", "statement": "Effects dispatched outside the atomic scope are declared excluded from the projection and are not assumed to roll back.", "discharged_by": null },
+    { "kind": "tooling", "statement": "The snapshot mechanism covers every persistent write channel the system uses, including any introduced by later upgrades.", "discharged_by": "BPO:0030" }
+  ],
+  "provenance": {
+    "authors": ["BPO seed"],
+    "created": "2026-08-08",
+    "confidence": "draft",
+    "sources": ["ACID atomicity and database recovery theory", "failure-atomicity treatments in transactional memory", "a collateralized-lending B-method verification study"],
+    "notes": "Allocated in the execution decade beside BPO:0020 rather than in the lending block: this is a platform-level execution guarantee that lending records depend on, not a lending property. It carries both `guarantee` and `environmental-assumption` deontic roles because the same statement is an obligation for a system that emulates rollback and an assumption for one running on a platform that provides it."
+  }
+}

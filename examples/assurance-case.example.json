@@ -1,0 +1,312 @@
+{
+  "assurance_case": {
+    "id": "example-collateralized-lending-0-1-0",
+    "title": "Example collateralized-lending system — synthetic assurance-case cross-walk",
+    "version": "0.1.0",
+    "subject": {
+      "name": "Example collateralized-lending system (synthetic; no real protocol)",
+      "revision": "0000000000000000000000000000000000000000",
+      "source_url": "https://example.invalid/synthetic-subject"
+    },
+    "bpo_baseline": {
+      "revision": "0000000000000000000000000000000000000000",
+      "property_count": 37
+    },
+    "produced_by": ["BPO seed"],
+    "created": "2026-08-08",
+    "notes": "This document exists so schema/validate_refs.py exercises all eight assurance-case gates in CI. It is NOT a case study: the subject is invented, the revisions are placeholders, and the evidence records describe results that were never produced. BPO hosts no real cross-walk, because a cross-walk is an artifact of the verification project that produced the evidence and points up at this catalogue. The eight entries below are chosen to cover every `alignment` value and every `evidence.class` value, including the combinations the gates are designed to reject when they are mislabelled."
+  },
+
+  "local_ledger": {
+    "property_count": 8,
+    "assumption_count": 4
+  },
+
+  "alignment_summary": {
+    "scoped_instantiation": 3,
+    "partial_overlap": 3,
+    "no_exact_match": 2
+  },
+
+  "assumptions": [
+    {
+      "id": "EX-A-BND-01",
+      "family": "bounded-model",
+      "statement": "The account set is finite and bounded by the verification profile; results hold within that bound and are not unbounded claims.",
+      "discharged_by": null
+    },
+    {
+      "id": "EX-A-BND-02",
+      "family": "bounded-model",
+      "statement": "Accounted quantities are drawn from a finite range chosen so that both the healthy and unhealthy regions are reachable.",
+      "discharged_by": null
+    },
+    {
+      "id": "EX-A-TOK-01",
+      "family": "asset-interface",
+      "statement": "The settlement asset moves exactly the requested quantity, charges no third-party fee, and does not change balances absent a call from the system.",
+      "discharged_by": "BPO:0120"
+    },
+    {
+      "id": "EX-A-ENV-01",
+      "family": "execution-platform",
+      "statement": "A failed execution restores the persistent projection to its entry value.",
+      "discharged_by": "BPO:0021"
+    }
+  ],
+
+  "alignments": [
+    {
+      "local_id": "EX-LEDGER-01",
+      "local_name": "Aggregate position total equals the fold of individual positions",
+      "alignment": "scoped-instantiation",
+      "bpo_targets": [
+        {
+          "property": "BPO:0110",
+          "clause": "Fold consistency: G_k(m, s) = FOLD over accounts of P_k(m, u, s)",
+          "note": "One accounted class only; the backing clause of the same record is not established by this entry."
+        }
+      ],
+      "symbol_bindings": [
+        { "generic": "G_k", "local": "aggregatePositionTotal", "note": "Single accounted class in the local model." },
+        { "generic": "P_k", "local": "positionOf", "note": "Indexed by account within one instance." },
+        { "generic": "oplus_k", "local": "integer addition" }
+      ],
+      "covered_clauses": ["fold consistency for the single accounted class"],
+      "uncovered_clauses": ["the backing relation", "multi-class aggregation", "loss-allocation symmetry"],
+      "residual_scope": "Holds within the finite account and quantity bounds of the profile. Says nothing about unbounded account sets, about the backing relation, or about the deployed system.",
+      "local_assumptions": ["EX-A-BND-01", "EX-A-BND-02"],
+      "evidence": {
+        "class": "complete-finite-reachability",
+        "result": "pass",
+        "grade": "E4",
+        "machine": "EX_MC_Accounting",
+        "tool": { "name": "ExampleModelChecker", "version": "0.0.0", "revision": "synthetic" },
+        "bounds": "2 instances, 3 accounts, quantities 0..8",
+        "artifact": "results/EX_MC_Accounting.xml",
+        "reachability_claim": "exhaustive",
+        "transition_preservation": true,
+        "domain_exhaustive": false,
+        "reproducible": true
+      },
+      "proof_transfer": "none"
+    },
+
+    {
+      "local_id": "EX-ROUND-01",
+      "local_name": "Conversion round trip does not favour the initiating account",
+      "alignment": "scoped-instantiation",
+      "bpo_targets": [
+        {
+          "property": "BPO:0111",
+          "clause": "Round trip: RT(d1, d2, q, s) rel_rho q under an unchanged quotation state",
+          "note": "Demonstrated on a curated deterministic trace only."
+        }
+      ],
+      "symbol_bindings": [
+        { "generic": "Q_mode", "local": "convertWithDirection" },
+        { "generic": "rel_rho", "local": "less-than-or-equal, protecting the pool" }
+      ],
+      "covered_clauses": ["round-trip direction on the exercised path"],
+      "uncovered_clauses": ["the per-mode approximation contract", "the denominator side condition", "the relational clause over all reachable states"],
+      "residual_scope": "A curated trace shows the direction holds on one path. It is not domain-exhaustive and is not a relational proof; the 2-safety clause of the target record remains open.",
+      "local_assumptions": ["EX-A-BND-02"],
+      "evidence": {
+        "class": "curated-trace",
+        "result": "partial",
+        "grade": "E2",
+        "machine": "EX_ExactRegression",
+        "tool": { "name": "ExampleModelChecker", "version": "0.0.0" },
+        "bounds": "single deterministic trace, 12 steps",
+        "artifact": "results/EX_ExactRegression.trace.json",
+        "reachability_claim": "none",
+        "transition_preservation": false,
+        "domain_exhaustive": false,
+        "reproducible": true
+      },
+      "review_caveat": "Independent review noted the trace exercises only the protected direction and would not detect an inverted mode selection on the unexercised path.",
+      "proof_transfer": "none"
+    },
+
+    {
+      "local_id": "EX-CB-01",
+      "local_name": "A pending claim is consumed exactly once and never outstanding at a stable boundary",
+      "alignment": "scoped-instantiation",
+      "bpo_targets": [
+        {
+          "property": "BPO:0116",
+          "clause": "Exactly-once consumption, and no execution reaches a stable boundary with a claim outstanding",
+          "note": "Checked as a temporal product against the claim automaton."
+        }
+      ],
+      "symbol_bindings": [
+        { "generic": "PendingClaim", "local": "pendingReceivable" },
+        { "generic": "phase", "local": "callbackActive flag" }
+      ],
+      "covered_clauses": ["exactly-once consumption", "no outstanding claim at a stable boundary"],
+      "uncovered_clauses": ["the frame condition across the untrusted call", "the coverage inequality during the interaction phase"],
+      "residual_scope": "Both antecedent phases are reachable in the profile, so the clause is non-vacuous within its bounds. The frame condition is not encoded and remains open.",
+      "local_assumptions": ["EX-A-BND-01", "EX-A-ENV-01"],
+      "evidence": {
+        "class": "temporal-product",
+        "result": "pass",
+        "grade": "E4",
+        "machine": "EX_MC_Callbacks",
+        "tool": { "name": "ExampleModelChecker", "version": "0.0.0" },
+        "bounds": "195-state callback product, both antecedent phases reachable",
+        "artifact": "results/EX_MC_Callbacks.ltl.log",
+        "reachability_claim": "exhaustive",
+        "transition_preservation": true,
+        "domain_exhaustive": false,
+        "reproducible": true
+      },
+      "proof_transfer": "none"
+    },
+
+    {
+      "local_id": "EX-AUTH-01",
+      "local_name": "Exit operations are enabled whenever the declared precondition holds",
+      "alignment": "partial-overlap",
+      "bpo_targets": [
+        {
+          "property": "BPO:0117",
+          "clause": "Enabledness: Pre implies an exit edge exists",
+          "note": "Operation-local constraint checking over enumerated inputs."
+        },
+        {
+          "property": "BPO:0040",
+          "clause": "Authority soundness",
+          "note": "Overlaps on the authority conjunct only; neither record covers the other."
+        }
+      ],
+      "symbol_bindings": [],
+      "covered_clauses": ["guard admits the enumerated precondition states"],
+      "uncovered_clauses": ["which of those states are reachable", "full guard-region containment", "any eventuality claim"],
+      "residual_scope": "Operation-local checking says nothing about reachability. This is explicitly NOT evidence for BPO:0002 eventual withdrawal, which is a fairness-conditional liveness claim of a different kind.",
+      "local_assumptions": ["EX-A-BND-01"],
+      "evidence": {
+        "class": "operation-local-cbc",
+        "result": "pass",
+        "grade": "E4",
+        "machine": "EX_MC_AuthSlice",
+        "tool": { "name": "ExampleConstraintChecker", "version": "0.0.0" },
+        "bounds": "13 operations, inputs enumerated over the bounded domain",
+        "artifact": "results/cbc/EX_TryWithdraw.log",
+        "reachability_claim": "bounded",
+        "transition_preservation": false,
+        "domain_exhaustive": false,
+        "reproducible": true
+      },
+      "proof_transfer": "none"
+    },
+
+    {
+      "local_id": "EX-TYPE-01",
+      "local_name": "State typing and finite bounds hold over the enumerated state space",
+      "alignment": "partial-overlap",
+      "bpo_targets": [
+        {
+          "property": "BPO:0110",
+          "clause": "Well-formedness of the accounted quantities entering the fold",
+          "note": "Static assertion enumeration; overlaps the record's precondition rather than its clause."
+        }
+      ],
+      "symbol_bindings": [],
+      "covered_clauses": ["quantities remain within the declared domain over the enumerated states"],
+      "uncovered_clauses": ["preservation by transitions", "the fold equality itself"],
+      "residual_scope": "An assertion over a state enumeration is not an inductive step, and this entry claims none. It is also explicitly not compiler arithmetic preservation (BPO:0060), which concerns source-to-bytecode translation rather than model-level typing.",
+      "local_assumptions": ["EX-A-BND-01", "EX-A-BND-02"],
+      "evidence": {
+        "class": "static-assertion",
+        "result": "pass",
+        "grade": "E1",
+        "machine": "EX_MC_Core",
+        "tool": { "name": "ExampleModelChecker", "version": "0.0.0" },
+        "bounds": "parse, type and initialisation checks only; the broad graph is not explored",
+        "artifact": "results/EX_MC_Core.static.log",
+        "reachability_claim": "none",
+        "transition_preservation": false,
+        "domain_exhaustive": false,
+        "reproducible": true
+      },
+      "proof_transfer": "none"
+    },
+
+    {
+      "local_id": "EX-LIQ-01",
+      "local_name": "A weakened liquidation eligibility guard is detected",
+      "alignment": "partial-overlap",
+      "bpo_targets": [
+        {
+          "property": "BPO:0114",
+          "clause": "Eligibility guard",
+          "note": "Mutation evidence: the guard is being checked by the profile, which is weaker than the guard being correct."
+        }
+      ],
+      "symbol_bindings": [],
+      "covered_clauses": ["the profile detects a weakened eligibility guard"],
+      "uncovered_clauses": ["settlement conservation", "seizure bounds", "residual recognition"],
+      "residual_scope": "A surviving mutant would show the guard is unchecked; a killed mutant shows only that it is checked, not that it is right.",
+      "local_assumptions": ["EX-A-BND-02"],
+      "evidence": {
+        "class": "mutation-expected-fail",
+        "result": "expected-fail",
+        "grade": "E4",
+        "machine": "EX_MUT_UnsafeLiquidate",
+        "tool": { "name": "ExampleModelChecker", "version": "0.0.0" },
+        "bounds": "single mutant against the bounded accounting profile",
+        "artifact": "results/EX_MUT_UnsafeLiquidate.trace.json",
+        "reachability_claim": "bounded",
+        "transition_preservation": false,
+        "domain_exhaustive": false,
+        "reproducible": true
+      },
+      "proof_transfer": "none"
+    },
+
+    {
+      "local_id": "EX-TIME-01",
+      "local_name": "The instance time measure is monotone across every operation",
+      "alignment": "no-exact-match",
+      "bpo_targets": [],
+      "symbol_bindings": [],
+      "covered_clauses": [],
+      "uncovered_clauses": ["monotone instance time as a standalone obligation"],
+      "residual_scope": "At the pinned baseline no catalogue record carried monotone instance time as its own clause; it appears only as a conjunct inside accrual consistency. Recorded as a gap rather than forced onto an approximate target.",
+      "local_assumptions": ["EX-A-BND-01"],
+      "evidence": {
+        "class": "none",
+        "result": "gap",
+        "grade": "E0",
+        "reachability_claim": "none",
+        "transition_preservation": false,
+        "domain_exhaustive": false,
+        "reproducible": false
+      },
+      "proof_transfer": "none"
+    },
+
+    {
+      "local_id": "EX-LIVE-01",
+      "local_name": "An eligible position is eventually liquidated under fair participation",
+      "alignment": "no-exact-match",
+      "bpo_targets": [],
+      "symbol_bindings": [],
+      "covered_clauses": [],
+      "uncovered_clauses": ["fairness-conditional liquidation liveness"],
+      "residual_scope": "No run was performed and no catalogue record makes this claim: BPO:0114 is explicit that it asserts no liveness. Recorded as a gap so the absence is visible rather than inferred from silence.",
+      "local_assumptions": [],
+      "evidence": {
+        "class": "none",
+        "result": "gap",
+        "grade": "E0",
+        "reachability_claim": "none",
+        "transition_preservation": false,
+        "domain_exhaustive": false,
+        "reproducible": false
+      },
+      "review_caveat": "Independent review flagged that an earlier draft reported this as satisfied by a bounded enabledness run. Enabledness is not liveness; the entry is a gap.",
+      "proof_transfer": "none"
+    }
+  ]
+}

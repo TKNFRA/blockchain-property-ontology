@@ -1,0 +1,97 @@
+{
+  "id": "BPO:0122",
+  "slug": "rate-provider-call-integrity",
+  "title": "Rate-Provider Call Integrity (Termination, Range, Unit, Input Fidelity, Frame)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["interest rate model contract", "IRM call assumption", "rate bound enforcement", "rate provider termination"],
+    "academic_terms": ["total function contract on an external module", "input fidelity of a delegated computation", "frame condition on a delegated call"],
+    "industry_terms": ["interest rate model", "utilisation curve", "rate cap"],
+    "external_refs": {
+      "cwe": ["CWE-20 Improper Input Validation", "CWE-834 Excessive Iteration"],
+      "other": ["rely-guarantee reasoning for delegated computations"]
+    }
+  },
+  "classification": {
+    "modal_class": ["safety"],
+    "deontic_role": ["assumption", "constraint", "environmental-assumption"],
+    "domains": ["defi-lending", "defi", "contract"],
+    "abstraction_levels": ["contract", "protocol"],
+    "verification_modalities": ["smt", "symbolic-execution", "model-checking", "runtime-verification"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "A call to an external rate provider terminates, returns a value within a declared range and unit, receives the instance state it is entitled to observe without distortion, and modifies neither its own local state in ways the consumer depends on nor any protected state of the consumer. Like the other dependency contracts, this is an assumption node: it names what a consuming system must declare about its rate source, and does not assert that any particular provider satisfies it.",
+    "system_theoretic": "The rate provider is a delegated computation invoked during accrual. The profile declares an input relation specifying which components of instance state are passed and that they are passed faithfully, a range and unit for the returned rate, a termination obligation, a local-state policy specifying whether the provider may keep state and whether the consumer's guarantees depend on it, and a frame condition on the consumer's protected state. The property is the conjunction; each clause is a parameter of the declaration rather than a fixed requirement.",
+    "security": "A rate provider sits inside the accrual path, which means every one of its failure modes converts directly into either a denial of service or an inflation bug. Five families matter. Non-termination or excessive cost: the call does not return within the execution budget, so every operation that accrues is blocked — including exits, which is how a rate provider becomes a fund-freezing mechanism. Unbounded return: the rate exceeds any value the accrual relation was designed for, so a single accrual step generates a quantity that dwarfs the instance. Input distortion: the provider is passed stale or partial instance state, so the rate is computed from a utilisation figure that does not hold, and the resulting accrual is correct arithmetic on wrong inputs. Frame violation: the provider writes consumer state during the call, so the accrual computation completes against state it did not expect. Reentrancy: the provider calls back into the consumer mid-accrual, exposing the half-updated accrual state.",
+    "execution_semantics": "Concretely the call from the accrual routine into a configured rate contract, the arguments it passes, and the handling of the returned value. Violations live in: a return value consumed without a bound check; instance state gathered before rather than after a pending update, so the provider sees stale utilisation; a provider whose cost is unbounded in some input region; a consumer that depends on provider-local state it cannot verify; and an accrual path that continues after a provider call that reentered.",
+    "formal_verification": "The range, unit, and input-fidelity clauses are provable over the consumer by SMT or symbolic execution: prove the bound check dominates the use, and prove the arguments passed are the current instance state rather than a stale copy. Termination is not a consumer-side property and must be discharged by evidence about the provider or bounded by an execution budget the consumer enforces. As with the other dependency contracts, verifying the consumer under an assumed profile yields a conditional result, and the condition must be reported with it rather than absorbed into the claim."
+  },
+  "formalization": {
+    "signature": "Rate providers R; instance state projection inp : M x State -> Inp; rate call rate : R x Inp -> Val x Outcome; declared range RateRng; unit ru; termination budget beta; provider-local state Loc; consumer frame ConsumerFrame.",
+    "symbols": ["R", "inp", "Inp", "rate", "RateRng", "ru", "beta", "Loc", "ConsumerFrame", "M", "State", "Val", "Outcome"],
+    "first_order_logic": "Termination:  forall r, i . rate(r, i) returns within budget beta, or the consumer's error policy applies.\nRange and unit:  forall r, i . rate(r, i) = (x, ok)  ->  x in RateRng and unit(x) = ru.\nInput fidelity:  the argument passed is inp(m, s) for the current s, not a stale or partial copy; in particular any pending update the rate is meant to reflect has been applied before inp is taken.\nLocal-state independence:  the consumer's guarantees do not depend on any property of Loc the consumer cannot verify; a provider that resets or mutates Loc must not thereby invalidate a consumer invariant.\nFrame:  rate does not modify any component of ConsumerFrame.\nNo mid-accrual reentry:  a profile permitting the provider to call back into the consumer brings BPO:0116's obligations into scope on the accrual path, where half-updated accrual state is observable.\nNegative form: none of these clauses is asserted to hold of any provider; they are the vocabulary of a declaration.",
+    "temporal_logic": {
+      "ltl": "G( rateConsumed -> (inRange and correctUnit and inputCurrent and frameUnchanged) )",
+      "fairness": "n/a — safety property"
+    },
+    "hoare": [
+      { "pre": "instance state current for m", "command": "rate(r, inp(m, s))", "post": "returned value in RateRng and in unit ru, or the error policy applied" },
+      { "pre": "pending update outstanding on m", "command": "rate(r, inp(m, s))", "post": "ill-formed: the update must be applied before inp is taken" },
+      { "pre": "provider fails or exceeds budget", "command": "accrue(m)", "post": "the consumer's declared error policy applies; the outcome is not an unbounded accrual" }
+    ],
+    "state_machine": "The provider is an environment module invoked on the accrual edge. Its return is constrained only by the declared profile; the consumer's obligation is that the bound check dominates the use and that the passed input is the current instance projection.",
+    "type_theoretic": "The rate as a refinement type carrying its range and unit, consumable only with the refinement witness; the input projection as a linear read of current state, so passing a stale copy is not typeable.",
+    "algebraic": "The rate enters the accrual relation as a scalar; the range clause is what makes the accrual function's image bounded, which is the precondition for BPO:0112's discretization-error bound to be meaningful at all."
+  },
+  "relationships": [
+    { "type": "composesWith", "target": "BPO:0112", "note": "The accrual relation consumes this call's result. The range clause here is what makes the accrual function's image bounded; without it the discretization-error bound in BPO:0112 has nothing to bound." },
+    { "type": "dependsOn", "target": "BPO:0118", "note": "Where rate providers are restricted to an enable-only registry, the restriction is an admission and monotonicity obligation on instance configuration." },
+    { "type": "conflictsWith", "target": "BPO:0117", "note": "Genuine tension: a provider that fails or does not terminate blocks the accrual path, and therefore blocks every operation that accrues — including exits. The dependency-minimality clause of BPO:0117 cannot resolve this where accrual genuinely precedes the exit." },
+    { "type": "mitigates", "target": "ATK:rate-provider-dos" },
+    { "type": "mitigates", "target": "ATK:unbounded-rate" },
+    { "type": "mitigates", "target": "ATK:stale-rate-input" }
+  ],
+  "attack_surface": [
+    { "class": "rate-provider-dos", "pattern": "the call does not return within the execution budget, blocking every operation that accrues", "incident_refs": [], "notes": "Because accrual precedes exits, this is a fund-freezing mechanism rather than a mere availability issue." },
+    { "class": "unbounded-rate", "pattern": "the returned rate exceeds anything the accrual relation was designed for", "incident_refs": [], "notes": "A single accrual step can then generate a quantity that dwarfs the instance." },
+    { "class": "stale-rate-input", "pattern": "the provider is passed instance state from before a pending update, so the rate reflects a utilisation that does not hold", "incident_refs": [], "notes": "Correct arithmetic on wrong inputs. Invisible to any check on the returned value alone." },
+    { "class": "provider-frame-violation", "pattern": "the provider writes consumer state during the call", "incident_refs": [], "notes": "The accrual computation completes against state it did not expect." },
+    { "class": "mid-accrual-reentry", "pattern": "the provider calls back into the consumer while accrual state is half-updated", "incident_refs": [], "notes": "Brings BPO:0116 into scope on the accrual path specifically." }
+  ],
+  "observability": {
+    "events": ["rate call events carrying the input projection and returned value", "error-policy activation events"],
+    "metrics": ["returned rate against the declared range", "rate call cost against the declared budget", "count of calls whose input was not the current instance projection (must be zero)"],
+    "invariant_checkpoints": ["pre-consumption: returned rate in range and in the declared unit", "pre-call: any pending update applied so the input projection is current", "post-call: consumer frame unchanged"],
+    "runtime_assertions": ["assert the returned rate lies in the declared range before use", "assert the input projection is taken after any pending update", "clamp or fail per the declared error policy rather than consuming an out-of-range rate"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Check-dominance and input-currency proof", "tools": ["SMT-backed verifiers", "symbolic execution"], "strength": "proof", "notes": "Prove the range check dominates the use and that the passed projection is taken from current state. Both are consumer-side and fully dischargeable." },
+      { "approach": "Unconstrained-rate model checking", "tools": ["explicit-state model checkers", "ProB"], "strength": "bounded-proof", "notes": "Model the returned rate as unconstrained within the declared range so accrual guarantees hold across it rather than at one value." },
+      { "approach": "Provider termination evidence", "tools": ["cost analysis", "execution-budget enforcement"], "strength": "bounded-proof", "notes": "Not a consumer-side property. Discharge by analysing the provider or by enforcing a budget with a declared error policy; a consumer proof cannot establish it." },
+      { "approach": "Consumer proof under an assumed profile", "tools": ["SMT-backed verifiers"], "strength": "bounded-proof", "notes": "Conditional result. The condition must be reported with it rather than absorbed into the claim." }
+    ],
+    "testability": ["an out-of-range rate is never consumed", "a provider that does not terminate triggers the declared error policy rather than blocking indefinitely without one", "the input projection reflects any pending update", "a reentrant provider does not reach a consumer state read that assumes accrual completed"]
+  },
+  "enforcement": {
+    "runtime": ["bound-check the returned rate before use", "take the input projection after applying any pending update", "enforce an execution budget with an explicit error policy"],
+    "static": ["prove the bound check dominates every consuming use", "prove the input projection is current on every call path", "prove no protected consumer component is written during the call"],
+    "design_patterns": ["declare the rate range and unit as named parameters shared by the consumer and the specification", "enable-only provider registry so a provider in use cannot be withdrawn", "error policy that clamps to a declared bound rather than propagating a failure into the exit path"]
+  },
+  "assumptions": [
+    { "kind": "environmental", "statement": "The rate provider terminates within the consumer's execution budget.", "discharged_by": null },
+    { "kind": "environmental", "statement": "The provider returns a value in the declared range and unit when it succeeds.", "discharged_by": null },
+    { "kind": "environmental", "statement": "The provider does not modify the consumer's protected state during the call.", "discharged_by": null },
+    { "kind": "economic", "statement": "The rate the provider computes is an appropriate function of the instance state for the deployment's conditions. This record constrains the call, not the model's economic suitability.", "discharged_by": null },
+    { "kind": "trust", "statement": "Where discharge is by an enable-only registry, the vetting establishes the profile for each admitted provider and no admitted provider is later withdrawn from under an instance using it.", "discharged_by": "BPO:0118" }
+  ],
+  "provenance": {
+    "authors": ["BPO seed"],
+    "created": "2026-08-08",
+    "confidence": "draft",
+    "sources": ["rely-guarantee reasoning for delegated computations", "interest-rate-model interface practice", "a collateralized-lending B-method verification study"],
+    "notes": "The third dependency contract, and the one whose failure is most directly a liveness problem rather than a safety one: because accrual precedes exits, a non-terminating rate provider freezes funds. That tension with BPO:0117 is recorded as a conflictsWith edge rather than resolved, since resolving it is a design decision a specialization makes, not a fact the ontology can assert."
+  }
+}

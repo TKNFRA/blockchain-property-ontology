@@ -1,0 +1,99 @@
+{
+  "id": "BPO:0114",
+  "slug": "liquidation-accounting-and-loss-allocation-safety",
+  "title": "Liquidation Accounting and Loss-Allocation Safety (Eligibility, Bounds, Settlement, Residual)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["liquidation correctness", "bad-debt socialization safety", "seizure bound", "no liquidation of healthy positions"],
+    "academic_terms": ["guarded settlement transition with conservation", "loss allocation policy", "bounded incentive transfer"],
+    "industry_terms": ["liquidation bonus", "close factor", "bad debt write-off", "seize collateral"],
+    "external_refs": {
+      "dasp": ["DASP-2 Access Control (eligibility guard)", "DASP-3 Arithmetic (seizure and repayment rounding)"],
+      "other": ["default-resolution and loss-mutualisation practice in cleared markets"]
+    }
+  },
+  "classification": {
+    "modal_class": ["safety"],
+    "deontic_role": ["invariant", "guarantee", "constraint", "policy"],
+    "domains": ["defi-lending", "defi", "contract", "economic"],
+    "abstraction_levels": ["economic", "contract", "systemic"],
+    "verification_modalities": ["smt", "model-checking", "symbolic-execution", "abstract-interpretation", "fuzzing"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "A liquidation may only proceed against a position the declared eligibility predicate admits; it may seize and repay no more than the declared bounds permit; its settlement conserves value across the debtor, the liquidator, and the instance under the declared incentive; and any residual liability it cannot cover is recognized according to the declared loss-allocation policy rather than left implicit. Each of the four clauses is parameterized; the record requires that a policy be declared and obeyed, not that any particular incentive or close factor be used.",
+    "system_theoretic": "Liquidation is a guarded settlement transition. The profile supplies an eligibility predicate (typically the negation of the health predicate under the same comparator), position bounds limiting the repayable and seizable quantities, an incentive function determining the liquidator's surplus, and a residual policy determining what happens when seizable collateral is exhausted before the liability is. The property is the conjunction of: the guard holds in the pre-state; the effected quantities lie within the bounds; the sum of value changes across all parties equals the declared incentive term and nothing else; and the residual, if any, is recognized symmetrically on both sides of the backing relation.",
+    "security": "Liquidation is the one operation designed to move value out of a position without its owner's consent, which makes every unstated parameter an exploit. Five families matter. Eligibility inversion: a healthy position is liquidatable because the eligibility comparator disagrees with the health comparator at the boundary. Unbounded seizure: the seizable quantity is not capped by the position's actual collateral or by the close factor, so a liquidator takes more than the incentive permits. Incentive leakage: the settlement does not conserve, so the liquidator's gain exceeds the debtor's loss plus the declared incentive, and the difference comes from other claim holders. Silent residual: seizable collateral is exhausted, the liability remains, and the shortfall is neither recognized nor allocated, so the backing relation is violated without any event recording it. Asymmetric recognition: the residual reduces one side of the backing relation only, which converts a recognized loss into a fold inconsistency.",
+    "execution_semantics": "Concretely a routine that checks eligibility, computes a repayment and a seizure from the liquidator's input, transfers collateral to the liquidator, reduces the debtor's liability, and — where the position is exhausted — writes down the remaining liability against the creditor side. Violations live in: an eligibility check evaluated against stale balances; a seizure computation that does not clamp to the position's actual collateral; an incentive applied to a quantity computed before rather than after the clamp; and a residual path that reduces the debt measure without the matching reduction to the creditor measure.",
+    "formal_verification": "Each clause is a 1-safety obligation over the liquidation transition and is SMT-tractable given the profile. The settlement-conservation clause is the one most often under-specified: it requires an explicit statement of every party whose value changes, and a proof that the signed sum equals the incentive term. Under bounded checking, the profile must admit reachable states in which liquidation is eligible and in which the residual path is taken — a bound where positions cannot become unhealthy, or where collateral is never exhausted, makes the corresponding clauses vacuous and the result must say so."
+  },
+  "formalization": {
+    "signature": "Instances M; accounts U; liquidator l; states State; eligibility predicate Elig; repayable bound maxRepay; seizable bound maxSeize; incentive function Inc; settlement value change dV : Party x State x State -> Val; residual Residual : M x U x State -> Q; loss allocation LossAlloc; backing relation Backed from BPO:0110.",
+    "symbols": ["M", "U", "State", "Elig", "maxRepay", "maxSeize", "Inc", "dV", "Residual", "LossAlloc", "Backed", "Party"],
+    "first_order_logic": "Eligibility guard:  forall m, u, l, s, s' . liquidate(m, u, l, s, s') succeeds  ->  Elig(m, u, s).\nBoundedness:  repaid <= maxRepay(m, u, s) and seized <= maxSeize(m, u, s), where maxSeize is clamped by the position's actual collateral.\nSettlement conservation:  dV(debtor) + dV(liquidator) + dV(instance) = Inc(m, u, s), and no other party's value changes.\nIncentive well-formedness:  Inc is computed from the clamped quantities, not from the requested ones.\nResidual recognition:  Residual(m, u, s') > 0  ->  LossAlloc reduces both sides of Backed by the declared allocation, and Backed(m, s') holds.\nNo residual when covered:  seizable collateral not exhausted  ->  Residual(m, u, s') = 0.\nBoundary agreement:  Elig is the complement of the health predicate under the same comparator, so no position is both non-borrowable and non-liquidatable.\nNon-vacuity obligation:  the verification profile admits reachable eligible states and reachable residual states.",
+    "temporal_logic": {
+      "ltl": "G( liquidationSucceeded -> (eligibleInPreState and withinBounds and settlementConserved and residualRecognized) )",
+      "fairness": "n/a — safety property. This record makes no liveness claim that an eligible position will be liquidated."
+    },
+    "hoare": [
+      { "pre": "not Elig(m, u)", "command": "liquidate(m, u, l)", "post": "the operation failed and no value moved" },
+      { "pre": "Elig(m, u) and Backed(m)", "command": "liquidate(m, u, l)", "post": "Backed(m) and repaid <= maxRepay and seized <= maxSeize" },
+      { "pre": "Elig(m, u) and collateral exhausted by the seizure", "command": "liquidate(m, u, l)", "post": "Residual recognized on both sides per LossAlloc and Backed(m)" }
+    ],
+    "state_machine": "Liquidation edges are guarded by Elig and annotated with the signed value change of each party and with the residual recognized. The property constrains the guard, the annotation's sum, and the residual bookkeeping on every such edge.",
+    "type_theoretic": "The seized collateral and repaid liability as linear resources: the settlement is a rearrangement whose only net production is the declared incentive, so a leak is not typeable. The residual is an explicitly produced loss token that must be consumed by the allocation policy.",
+    "algebraic": "Settlement is a value-preserving rearrangement modulo the incentive term; loss allocation is the quotient by the recognized-loss ideal, which is why it must be applied to both sides of the backing relation simultaneously."
+  },
+  "relationships": [
+    { "type": "dependsOn", "target": "BPO:0110", "note": "Settlement conservation and residual recognition are stated against the fold and backing relation; both must survive the liquidation step." },
+    { "type": "dependsOn", "target": "BPO:0111", "note": "Repayment and seizure quantities are computed through conversions whose direction determines who absorbs the rounding residual." },
+    { "type": "dependsOn", "target": "BPO:0113", "note": "Eligibility is the complement of the health predicate under the same comparator; a disagreement at the boundary is a defect in the pair, not in either alone." },
+    { "type": "dependsOn", "target": "BPO:0121", "note": "Eligibility and the incentive are computed under a valuation. This record constrains their use, not the valuation's correctness." },
+    { "type": "refines", "target": "BPO:0101", "note": "Supplies the loss-allocation term that generic conservation leaves undefined: a recognized loss is a sanctioned reduction, not a conservation violation, only if it is applied to both sides." },
+    { "type": "mitigates", "target": "ATK:healthy-position-liquidation" },
+    { "type": "mitigates", "target": "ATK:unbounded-seizure" },
+    { "type": "mitigates", "target": "ATK:silent-bad-debt" }
+  ],
+  "attack_surface": [
+    { "class": "healthy-position-liquidation", "pattern": "eligibility admits a position the health predicate would accept, typically at the comparator boundary", "incident_refs": [], "notes": "Boundary-agreement clause. Also reachable via a stale eligibility input." },
+    { "class": "unbounded-seizure", "pattern": "seizure is not clamped to the position's actual collateral or to the close factor", "incident_refs": [], "notes": "Boundedness clause. Often surfaces only at the exhaustion boundary." },
+    { "class": "incentive-leakage", "pattern": "the liquidator's gain exceeds the debtor's loss plus the declared incentive, funded by other claim holders", "incident_refs": [], "notes": "Settlement-conservation clause. Requires enumerating every party whose value changes." },
+    { "class": "silent-bad-debt", "pattern": "collateral is exhausted, liability remains, and the shortfall is neither recognized nor allocated", "incident_refs": [], "notes": "The backing relation is violated with no event recording it." },
+    { "class": "asymmetric-loss-recognition", "pattern": "the residual reduces the debt measure without the matching creditor-side reduction", "incident_refs": [], "notes": "Converts a recognized loss into a fold inconsistency under BPO:0110." },
+    { "class": "pre-clamp-incentive", "pattern": "the incentive is computed from the requested rather than the clamped quantity", "incident_refs": [], "notes": "Yields an incentive the settlement cannot fund." }
+  ],
+  "observability": {
+    "events": ["liquidation events carrying repaid, seized, incentive, and residual", "loss-recognition events with the allocation applied"],
+    "metrics": ["signed sum of party value changes minus the declared incentive (must be the identity)", "count of liquidations against positions the health predicate would accept (must be zero)", "recognized residual per instance"],
+    "invariant_checkpoints": ["pre-liquidation: eligibility holds against post-accrual balances", "post-liquidation: bounds respected and settlement conserved", "post-liquidation: backing relation re-established, with residual allocated symmetrically if non-zero"],
+    "runtime_assertions": ["assert seizure is clamped to available collateral before the incentive is computed", "assert the residual is zero whenever collateral was not exhausted", "assert both sides of the backing relation move together on the residual path"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Clause-wise guarded transition proof", "tools": ["SMT-backed verifiers", "Certora Prover"], "strength": "proof", "notes": "Prove the four clauses separately; a single combined assertion tends to hide which one is actually established." },
+      { "approach": "Complete finite reachability with eligibility and residual witnesses", "tools": ["explicit-state model checkers", "ProB"], "strength": "bounded-proof", "notes": "The profile must admit reachable eligible states and reachable exhaustion states. A bound where collateral is never exhausted makes the residual clauses vacuous, and the result must report that rather than count it as coverage." },
+      { "approach": "Settlement-conservation ghost accounting", "tools": ["ghost variables", "invariant fuzzing"], "strength": "high-coverage-evidence", "notes": "Track every party's signed value change in ghost state and assert the sum equals the incentive across random liquidation sequences." },
+      { "approach": "Mutation testing of the eligibility guard", "tools": ["mutation frameworks"], "strength": "heuristic-evidence", "notes": "Weaken the guard and confirm the check detects it. A guard whose mutation is not detected is not being checked by the profile in use." }
+    ],
+    "testability": ["a position the health predicate accepts cannot be liquidated", "seizure never exceeds available collateral under any input", "the signed sum of all party value changes equals the declared incentive", "exhausting collateral recognizes the residual on both sides and leaves the backing relation intact"]
+  },
+  "enforcement": {
+    "runtime": ["accrue before evaluating eligibility", "clamp seizure to available collateral before computing the incentive", "recognize residual through one allocation routine that touches both sides"],
+    "static": ["prove eligibility is the exact complement of the health predicate", "prove the settlement sum equals the incentive over all parties", "prove no path reduces liability without either a matching seizure or a recognized residual"],
+    "design_patterns": ["one eligibility predicate shared with the health check", "explicit residual token that the allocation policy must consume", "declare the close factor and incentive as named parameters rather than inline constants"]
+  },
+  "assumptions": [
+    { "kind": "environmental", "statement": "The valuation source used for eligibility and the incentive returns a well-formed value in the declared unit and scale.", "discharged_by": "BPO:0121" },
+    { "kind": "economic", "statement": "The declared incentive is sufficient to attract a liquidator in the deployment's market conditions. This record constrains the accounting of liquidation, not whether one will occur.", "discharged_by": null },
+    { "kind": "tooling", "statement": "Arithmetic in the seizure, repayment, and incentive computation is checked.", "discharged_by": "BPO:0060" },
+    { "kind": "environmental", "statement": "Accrual has been applied before eligibility is evaluated.", "discharged_by": "BPO:0112" }
+  ],
+  "provenance": {
+    "authors": ["BPO seed"],
+    "created": "2026-08-08",
+    "confidence": "draft",
+    "sources": ["default-resolution and loss-mutualisation practice in cleared markets", "a collateralized-lending B-method verification study"],
+    "notes": "Makes no liveness claim: that an eligible position will actually be liquidated depends on market participation and belongs to a separate conditional-liveness record, not here. The non-vacuity obligation is stated in the formalization because a bounded profile in which no position becomes eligible satisfies every clause trivially, and reporting that as coverage is the most common way this record is mis-verified."
+  }
+}

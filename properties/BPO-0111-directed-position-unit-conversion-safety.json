@@ -1,0 +1,95 @@
+{
+  "id": "BPO:0111",
+  "slug": "directed-position-unit-conversion-safety",
+  "title": "Directed Position-Unit Conversion Safety (Approximation Contract and Round-Trip Bound)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["rounding direction safety", "share/asset conversion correctness", "quotation approximation contract", "no free round trip"],
+    "academic_terms": ["directed rounding", "faithful rounding of a rational quotation", "monotone approximation with declared error direction"],
+    "industry_terms": ["round in the protocol's favour", "virtual shares and assets offset", "exchange-rate rounding policy"],
+    "external_refs": {
+      "dasp": ["DASP-3 Arithmetic"],
+      "swc": ["SWC-101 Integer Overflow and Underflow (adjacent: precision loss rather than wraparound)"],
+      "other": ["IEEE 754 directed rounding modes as a design analogue", "vault share-price inflation analyses"]
+    }
+  },
+  "classification": {
+    "modal_class": ["safety", "k-safety"],
+    "deontic_role": ["invariant", "guarantee", "policy"],
+    "domains": ["defi-lending", "defi", "contract", "token"],
+    "abstraction_levels": ["economic", "contract"],
+    "verification_modalities": ["smt", "abstract-interpretation", "model-checking", "symbolic-execution", "fuzzing"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "Every conversion between an asset quantity and a position quantity satisfies a declared approximation contract against the ideal rational quotation, and no round trip through a pair of conversions under an unchanged quotation state may benefit the initiating account contrary to the declared policy. The record fixes the shape of the obligation, not the choice of scheme: which side is protected, and what relation the executable quotation must bear to the ideal one, are policy parameters a specialization binds.",
+    "system_theoretic": "Let the ideal quotation be a rational-valued function of quantity and state, and let a finite set of quotation modes each supply an executable quotation. A policy supplies an approximation relation constraining each mode's quotation against the ideal one. The property has a single-trace half — every executed conversion satisfies its mode's approximation relation — and a relational half — for any two conversions composing into a round trip over an unchanged quotation state, the composite is bounded in the direction the policy declares. The relational half is why the record carries a k-safety modal class alongside safety.",
+    "security": "Directed conversion error is the quietest value-extraction primitive in pooled lending, because each individual operation is correct to within one unit and only the accumulated direction is exploitable. Three families matter. Round-trip extraction: convert out and back repeatedly, capturing a unit each time, until the residual is material. Quotation manipulation at the boundary: drive the position-to-asset quotation to a value where a subsequent conversion rounds to zero, so a counterparty's deposit issues no claim. Direction inversion: a single conversion whose rounding favours the initiator on a path the policy intended to protect. All three are invisible to a test that checks one conversion for correctness rather than for direction.",
+    "execution_semantics": "Concretely a family of conversion functions between an asset amount and a position amount, each pinned to a rounding direction chosen per call site according to which side the operation must protect. Violations live in: a call site using the wrong direction for its operation; an offset or virtual-quantity mechanism that shifts the quotation without being reflected in both directions; a conversion whose denominator can reach the identity of the aggregation operator, making the quotation undefined or trivially manipulable; and integer division applied where the policy required the opposite direction.",
+    "formal_verification": "The single-trace half is SMT-tractable once the ideal quotation is expressed as an exact rational relation and the executable quotation as an integer operation: prove the declared inequality or equality for every mode, together with the denominator side condition. The relational half is a 2-safety obligation and needs self-composition, a relational verifier, or bounded exhaustive checking over pairs of conversions; single-trace tools cannot establish it, and reporting a single-trace result as though it covered the round trip is a category error."
+  },
+  "formalization": {
+    "signature": "Quantity sorts X, Y; states State; ideal quotation R : Q x State -> Rat; quotation modes Delta; executable quotation Q_mode : Delta x Q x State -> Q; approximation policy rho with relation Approx; protected side prot : Op -> {initiator, counterparty, pool}; denominator function den : Delta x State -> Q; round-trip composite RT.",
+    "symbols": ["X", "Y", "State", "R", "Delta", "Q_mode", "rho", "Approx", "prot", "den", "RT", "Op", "Rat"],
+    "first_order_logic": "Approximation contract:  forall d in Delta, q, s . Approx(rho, d, Q_mode(d, q, s), R(q, s), s).\nCommon directed profile (one admissible binding of Approx, not a requirement of this record):\n  Q_mode(lower, q, s) <= R(q, s) <= Q_mode(upper, q, s), and Q_mode(exact, q, s) = R(q, s) when R(q, s) is representable.\nRound trip:  forall q, s, d1, d2 . quotationStateUnchanged(s)  ->  RT(d1, d2, q, s) rel_rho q, where rel_rho is the policy-declared direction for the protected side.\nDenominator side condition:  forall d, s . den(d, s) is distinct from the aggregation identity, so no quotation is undefined or degenerate.\nDirection obligation:  forall o in Op . the mode selected at o's conversion sites protects prot(o).",
+    "temporal_logic": {
+      "ltl": "G( everyConversionSatisfiesItsApproximationContract and denominatorNonDegenerate )",
+      "fairness": "n/a — safety and 2-safety, no fairness assumption"
+    },
+    "hoare": [
+      { "pre": "quotation state = S and mode d selected", "command": "convert(q, d)", "post": "result satisfies Approx(rho, d, result, R(q, S), S)" },
+      { "pre": "quotation state = S and account holds q", "command": "convert out then back under unchanged S", "post": "result rel_rho q, in the direction declared for the protected side" }
+    ],
+    "state_machine": "Annotate every transition that performs a conversion with its selected mode and protected side. The single-trace clause is a guard on each such edge; the relational clause constrains pairs of edges over states agreeing on the quotation projection.",
+    "type_theoretic": "Conversions as a family of functions indexed by mode, each carrying a refinement type witnessing its relation to the ideal rational quotation. The round-trip clause is a relational refinement over the composition of two such indexed functions.",
+    "algebraic": "The ideal quotation is a homomorphism into the rationals; executable quotations are its directed sections. The round-trip composite is not the identity but is bounded on one side, so the pair forms a Galois connection rather than an isomorphism.",
+    "hyperproperty": "The round-trip clause is 2-safety: it relates the pre-state of a first conversion to the post-state of a second over traces agreeing on the quotation projection. Self-composition or a relational verifier is required; no single-trace reachability argument establishes it."
+  },
+  "relationships": [
+    { "type": "dependsOn", "target": "BPO:0110", "note": "The quotation denominator is derived from the aggregate ledger; a drifted fold makes every conversion's approximation contract vacuous." },
+    { "type": "composesWith", "target": "BPO:0101", "note": "Directed conversion error is the mechanism by which conservation of value leaks in pooled designs; conservation bounds the total, this record bounds the direction." },
+    { "type": "composesWith", "target": "BPO:0060", "note": "Deliberate distinction: compiler arithmetic preservation guarantees the compiled operation computes the source-level integer operation. It does not establish that the chosen integer operation is the correct rounding direction for the call site, which is what this record requires." },
+    { "type": "mitigates", "target": "ATK:rounding-drain" },
+    { "type": "mitigates", "target": "ATK:share-inflation" },
+    { "type": "mitigates", "target": "ATK:round-trip-extraction" }
+  ],
+  "attack_surface": [
+    { "class": "round-trip-extraction", "pattern": "repeated convert-out-and-back under an unchanged quotation captures a unit per cycle until material", "incident_refs": [], "notes": "The relational clause exists for exactly this. Single-trace correctness does not exclude it." },
+    { "class": "share-inflation-donation", "pattern": "the quotation is driven so a subsequent conversion rounds a counterparty's deposit to zero claim", "incident_refs": ["UNVERIFIED: vault inflation-attack class"], "notes": "Offset or virtual-quantity mechanisms are the standard mitigation and must be reflected in both directions." },
+    { "class": "direction-inversion", "pattern": "a call site selects the mode that favours the initiator on a path intended to protect the pool", "incident_refs": [], "notes": "Per-call-site direction obligation. The most common single-line instance." },
+    { "class": "degenerate-denominator", "pattern": "the quotation denominator reaches the aggregation identity, making conversion undefined or arbitrarily manipulable", "incident_refs": [], "notes": "Explicit side condition rather than an implicit precondition." }
+  ],
+  "observability": {
+    "events": ["conversion events carrying input quantity, mode, and result", "quotation-state update events"],
+    "metrics": ["signed residual between executable and ideal quotation, per mode", "cumulative round-trip residual per account", "denominator distance from the aggregation identity"],
+    "invariant_checkpoints": ["per conversion: approximation contract holds for the selected mode", "per operation: selected mode protects the declared side", "pre-conversion: denominator non-degenerate"],
+    "runtime_assertions": ["assert the declared inequality between executable and ideal quotation where the ideal is computable", "assert a round trip does not increase the initiator's holding beyond the declared direction"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Exact rational comparison per mode", "tools": ["SMT-backed verifiers", "Certora Prover"], "strength": "proof", "notes": "Express the ideal quotation as an exact rational relation and prove the declared approximation relation for each mode, plus the denominator side condition." },
+      { "approach": "Self-composition for the round trip", "tools": ["relational verifiers", "self-composition encodings", "bounded model checkers"], "strength": "bounded-proof", "notes": "The 2-safety half. Must not be reported as covered by a single-trace result." },
+      { "approach": "Direction differential testing", "tools": ["Echidna", "Foundry invariant tests"], "strength": "high-coverage-evidence", "notes": "Random conversion sequences asserting the sign of the residual never favours the initiating account on protected paths." },
+      { "approach": "Residual interval analysis", "tools": ["interval analysis", "ghost residual tracking"], "strength": "bounded-proof", "notes": "Bound the cumulative residual reachable by any bounded sequence of conversions." }
+    ],
+    "testability": ["each mode satisfies its declared relation against an exact rational reference implementation", "a round trip under unchanged quotation never favours the initiator on a protected path", "a deposit into a manipulated quotation state cannot round to a zero claim", "the denominator cannot be driven to the aggregation identity by any reachable sequence"]
+  },
+  "enforcement": {
+    "runtime": ["select the conversion mode per call site from the operation's protected side, not per convenience", "offset or virtual-quantity mechanism applied consistently in both directions", "reject conversions whose denominator is degenerate"],
+    "static": ["prove the approximation relation for every mode against an exact rational model", "enumerate conversion call sites and prove each selects the protecting mode", "relational proof or bounded exhaustive check of the round-trip clause"],
+    "design_patterns": ["one conversion family with the mode as an explicit parameter rather than duplicated inline arithmetic", "declare the protected side per operation in the specification, not in comments", "make the ideal rational quotation an executable reference for differential testing"]
+  },
+  "assumptions": [
+    { "kind": "tooling", "statement": "Integer arithmetic is checked, so conversion intermediates cannot wrap.", "discharged_by": "BPO:0060" },
+    { "kind": "environmental", "statement": "The aggregate quantities entering the quotation denominator are fold-consistent.", "discharged_by": "BPO:0110" },
+    { "kind": "economic", "statement": "The policy's choice of protected side reflects the design's intended risk allocation; this record enforces the choice, it does not justify it.", "discharged_by": null }
+  ],
+  "provenance": {
+    "authors": ["BPO seed"],
+    "created": "2026-08-08",
+    "confidence": "draft",
+    "sources": ["directed-rounding theory", "vault share-price inflation analyses", "a collateralized-lending B-method verification study"],
+    "notes": "Carries both safety and k-safety because the round-trip clause is genuinely relational. Deliberately does not choose floor, ceiling, nearest-value, index arithmetic, exchange-rate arithmetic, or an offset scheme; a specialization binds the approximation relation and the protected side, and the record constrains the shape of that binding."
+  }
+}

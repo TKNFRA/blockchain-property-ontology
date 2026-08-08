@@ -1,0 +1,93 @@
+{
+  "id": "BPO:0117",
+  "slug": "conditional-position-exit-enabledness",
+  "title": "Conditional Position Exit Enabledness (Preconditions Met Implies the Exit Transition Is Enabled)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["no spurious exit blocking", "withdrawal enabledness", "exit path availability", "guard completeness"],
+    "academic_terms": ["enabledness of a guarded transition", "guard completeness relative to a declared precondition", "bounded existential reachability"],
+    "industry_terms": ["users can always withdraw when liquidity allows", "no stuck positions"],
+    "external_refs": {
+      "other": ["enabledness and deadlock-freedom formulations in guarded-command systems"]
+    }
+  },
+  "classification": {
+    "modal_class": ["guarantee-liveness-conditional"],
+    "deontic_role": ["guarantee", "capability", "temporal-commitment"],
+    "domains": ["defi-lending", "defi", "contract", "application"],
+    "abstraction_levels": ["contract", "protocol"],
+    "verification_modalities": ["model-checking", "bounded-model-checking", "symbolic-execution", "smt"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "Whenever the declared authority, funding, liquidity, dependency, and position preconditions all hold for an account, the corresponding full or partial exit transition is enabled — the system does not block an exit for any reason outside that declared set. This is an enabledness claim, not a liveness claim: it says the transition can be taken from the current state, not that it eventually will be. Nothing here promises that liquidity will become available, that a blocked exit will unblock, or that any scheduler will select the transition.",
+    "system_theoretic": "For each exit operation the profile declares a precondition predicate over authority, available funding, instance liquidity, external dependency status, and the position itself. The property is that the precondition implies the operation's guard: whenever the precondition holds in a state, an exit edge is present from that state. It is the completeness direction of the guard. The soundness direction — that the guard implies the precondition — belongs to access control and health preservation, not here. The property is stated over a single state and its immediate successors, which is what makes it decidable within bounds and strictly weaker than any eventuality claim.",
+    "security": "Exit blocking is a denial-of-service and a value-capture primitive at once: a position that cannot exit is a position whose holder must accept whatever terms the system later imposes. Four families matter. Undeclared blocking condition: the guard tests something the precondition does not mention — an administrative flag, an unrelated instance's state, a dependency's incidental status — so an exit is refused for a reason no holder can anticipate or remedy. Precondition drift: the precondition is documented but the guard has since gained a conjunct, so documentation and behaviour diverge silently. Rounding-induced block: an exit for the holder's full position fails because a conversion rounds the required quantity above what they hold, making the last unit permanently unexitable. Dependency coupling: an exit is blocked by the unavailability of a dependency the exit path did not actually need.",
+    "execution_semantics": "Concretely the guard on a withdrawal or repayment entry point, and whether that guard admits every state the declared precondition admits. Violations live in: guard conjuncts absent from the precondition; a full-position exit path that computes its quantity through a conversion rounding the wrong way; a shared pause or administrative flag consulted on the exit path; and a valuation or rate call on the exit path whose failure blocks an exit that does not depend on its result.",
+    "formal_verification": "An existential-successor claim, checkable by bounded CTL model checking or by constraint-based enumeration of the guard: for every state satisfying the precondition, show an exit edge exists. Two honesty constraints follow. First, operation-local constraint-based checking establishes enabledness over the states it enumerates and says nothing about which of those states are reachable; such a result must not be reported as exhaustive reachability. Second, this record is strictly weaker than eventual withdrawal under fairness: bounded enabledness does not imply that an exit will occur, and a result establishing enabledness must not be presented as establishing liveness."
+  },
+  "formalization": {
+    "signature": "Accounts U; instances M; states State; exit operations Exit; precondition Pre : Exit x M x U x State -> Bool decomposed into authority, funding, liquidity, dependency and position conjuncts; guard Guard : Exit x M x U x State -> Bool; transition relation step.",
+    "symbols": ["U", "M", "State", "Exit", "Pre", "Guard", "step", "authorityPre", "fundingPre", "liquidityPre", "dependencyPre", "positionPre"],
+    "first_order_logic": "Guard completeness:  forall e in Exit, m, u, s . Pre(e, m, u, s)  ->  Guard(e, m, u, s).\nEnabledness:  forall e in Exit, m, u, s . Pre(e, m, u, s)  ->  exists s' . step(e, m, u, s, s').\nPrecondition decomposition:  Pre = authorityPre and fundingPre and liquidityPre and dependencyPre and positionPre; every conjunct is declared, and the guard tests no condition outside this set.\nFull-exit exactness:  an exit for the holder's entire position is enabled whenever the non-position conjuncts hold; no rounding may render the final unit unexitable.\nDependency minimality:  dependencyPre names only dependencies the exit path's computation actually consumes.\nWeaker than liveness:  this record entails no eventuality. It does not imply that Pre will ever hold, nor that an enabled transition will be taken.",
+    "temporal_logic": {
+      "ctl": "AG( Pre -> EX exit )",
+      "ltl": "not expressible as a useful LTL formula: enabledness is an existential-successor property and LTL cannot quantify existentially over successors. Reporting an LTL result as covering this clause is unsound.",
+      "fairness": "None assumed and none required. Adding a fairness assumption would convert this into an eventuality claim, which is BPO:0002's territory, not this record's."
+    },
+    "hoare": [
+      { "pre": "Pre(e, m, u)", "command": "attempt e", "post": "e was enabled; it did not fail for a reason outside the declared precondition" },
+      { "pre": "authorityPre and fundingPre and liquidityPre and dependencyPre and the holder's full position", "command": "attempt full exit", "post": "enabled, with no residual unit left unexitable by rounding" }
+    ],
+    "state_machine": "For every state in the precondition region, at least one exit edge leaves it. The property constrains the presence of edges, not their selection: it is a statement about the transition relation's shape, not about any execution through it.",
+    "type_theoretic": "The precondition as a capability witness: holding it types an exit call as well-formed, so a refusal is a type error in the guard rather than an admissible outcome.",
+    "algebraic": "The precondition region must be contained in the guard region. The property is the containment; violations are exactly the elements of the set difference."
+  },
+  "relationships": [
+    { "type": "refines", "target": "BPO:0002", "note": "Strictly weaker than eventual withdrawal, and deliberately so. BPO:0002 is a fairness-conditional liveness claim: an exit eventually occurs. This record claims only that an exit edge exists from any state meeting the declared precondition. A bounded enabledness result is not evidence for BPO:0002 and must not be reported as such." },
+    { "type": "dependsOn", "target": "BPO:0040", "note": "The authority conjunct of the precondition is meaningful only if the authority relation is sound; this record supplies the completeness direction, access control the soundness direction." },
+    { "type": "dependsOn", "target": "BPO:0110", "note": "The funding and liquidity conjuncts are stated over the ledger; a drifted fold makes the precondition untestable." },
+    { "type": "conflictsWith", "target": "BPO:0050", "note": "Genuine design tension, recorded rather than hidden: a pause mechanism that halts exits necessarily narrows the guard region below the precondition region unless exits are explicitly carved out of the pause scope." },
+    { "type": "mitigates", "target": "ATK:spurious-exit-block" },
+    { "type": "mitigates", "target": "ATK:unexitable-residual" }
+  ],
+  "attack_surface": [
+    { "class": "spurious-exit-block", "pattern": "the guard tests a condition the declared precondition does not mention", "incident_refs": [], "notes": "The core violation. Administrative flags and unrelated-instance state are the usual conjuncts." },
+    { "class": "unexitable-residual", "pattern": "a full-position exit fails because a conversion rounds the required quantity above the holding", "incident_refs": [], "notes": "Full-exit exactness clause. Leaves a permanently stuck dust position." },
+    { "class": "dependency-coupled-block", "pattern": "an exit is blocked by a dependency the exit path did not need", "incident_refs": [], "notes": "Dependency minimality clause. A failing valuation call blocking a repayment is the canonical instance." },
+    { "class": "precondition-drift", "pattern": "the guard gains a conjunct the documented precondition never gained", "incident_refs": [], "notes": "Argues for the precondition being machine-checked against the guard rather than prose." }
+  ],
+  "observability": {
+    "events": ["exit attempt events carrying the outcome and, on refusal, the specific failing conjunct"],
+    "metrics": ["count of refusals whose cause lies outside the declared precondition (must be zero)", "count of positions where a full exit is refused while the non-position conjuncts hold (must be zero)"],
+    "invariant_checkpoints": ["precondition holds implies an exit edge exists", "full-position exit enabled whenever the non-position conjuncts hold"],
+    "runtime_assertions": ["on refusal, assert the failing condition is a declared precondition conjunct", "assert a full-position exit quantity never exceeds the holding through rounding"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Bounded CTL enabledness", "tools": ["CTL model checkers", "ProB"], "strength": "bounded-proof", "notes": "Check AG(Pre -> EX exit) over a finite profile. The bound is part of the result. This establishes enabledness, not eventuality." },
+      { "approach": "Operation-local constraint-based checking", "tools": ["constraint solvers", "operation-level CBC"], "strength": "bounded-proof", "notes": "Enumerates states satisfying the precondition and confirms the guard admits each. It says nothing about which of those states are reachable, and must not be labelled reachable or exhaustive." },
+      { "approach": "Guard-versus-precondition containment proof", "tools": ["SMT-backed verifiers"], "strength": "proof", "notes": "Prove the precondition region is contained in the guard region symbolically. This is the strongest available route and catches precondition drift directly." },
+      { "approach": "Full-exit boundary testing", "tools": ["Foundry invariant tests", "Echidna"], "strength": "high-coverage-evidence", "notes": "Drive positions to dust and confirm a full exit remains enabled." }
+    ],
+    "testability": ["every state meeting the declared precondition admits an exit", "a full-position exit is enabled whenever the non-position conjuncts hold", "no exit refusal cites a condition outside the declared precondition", "a failing dependency call does not block an exit path that does not consume its result"]
+  },
+  "enforcement": {
+    "runtime": ["compute a full-position exit quantity from the holding directly rather than through a round-tripping conversion", "return a structured refusal identifying the failing precondition conjunct", "avoid consulting dependencies the exit path does not consume"],
+    "static": ["prove guard-region containment of the precondition region", "enumerate guard conjuncts and prove each appears in the declared precondition", "prove no shared administrative flag is read on an exit path outside the declared scope"],
+    "design_patterns": ["declare the exit precondition as a named predicate shared by the guard and the specification", "carve exits out of pause scope explicitly where the design intends them to remain available", "make refusal reasons enumerable so drift is observable"]
+  },
+  "assumptions": [
+    { "kind": "environmental", "statement": "The execution platform will admit a well-formed call; enabledness is about the system's guard, not about the holder's ability to submit a transaction.", "discharged_by": null },
+    { "kind": "trust", "statement": "Authorities able to narrow the guard region (pause, scope changes, parameter updates) are correctly controlled.", "discharged_by": "BPO:0040" },
+    { "kind": "environmental", "statement": "The declared precondition is the complete intended set of blocking conditions; the record enforces the guard against it and cannot detect an omission both places share.", "discharged_by": null }
+  ],
+  "provenance": {
+    "authors": ["BPO seed"],
+    "created": "2026-08-08",
+    "confidence": "draft",
+    "sources": ["enabledness and deadlock-freedom formulations in guarded-command systems", "a collateralized-lending B-method verification study"],
+    "notes": "Classified guarantee-liveness-conditional rather than liveness on purpose. The distinction from BPO:0002 is the reason the record exists: bounded enabledness is routinely produced by model checkers and routinely over-reported as a withdrawal-liveness result. The LTL field says explicitly that no LTL formula covers this clause, so that an LTL run cannot be cited against it."
+  }
+}

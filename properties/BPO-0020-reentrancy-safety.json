@@ -49,6 +49,8 @@
   "relationships": [
     { "type": "composesWith", "target": "BPO:0001", "note": "A reentrant mint/credit callback must not bypass the supply guard or double-credit." },
     { "type": "composesWith", "target": "BPO:0101", "note": "Reentrancy is a principal mechanism by which conservation-of-value is broken (double withdrawal)." },
+    { "type": "refinedBy", "target": "BPO:0021", "note": "Atomic failure rollback isolates the ATOMICITY reading of this record — the state cutoff on failure — and says nothing about callback-boundary consistency." },
+    { "type": "refinedBy", "target": "BPO:0116", "note": "Callback settlement integrity refines the CALL-SITE-CONSISTENCY reading, adding the explicit pending claim covering the custody gap and its exactly-once consumption. A post-callback storage cutoff covers only part of this record's atomicity reading and should not be reported as covering either refinement in full." },
     { "type": "mitigates", "target": "ATK:reentrancy" },
     { "type": "mitigates", "target": "ATK:read-only-reentrancy" }
   ],

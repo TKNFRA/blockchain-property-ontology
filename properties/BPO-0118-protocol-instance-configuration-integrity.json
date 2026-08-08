@@ -1,0 +1,99 @@
+{
+  "id": "BPO:0118",
+  "slug": "protocol-instance-configuration-integrity",
+  "title": "Protocol Instance Configuration Integrity (Admission, Immutability, Monotone Registries, Bounded Parameters)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["market creation safety", "immutable instance parameters", "enable-only registry", "parameter bound enforcement"],
+    "academic_terms": ["admission control over an instance lattice", "monotone registry with no retraction", "bounded parameter domain invariant"],
+    "industry_terms": ["permissionless market creation from a whitelist", "immutable market parameters", "fee cap"],
+    "external_refs": {
+      "dasp": ["DASP-2 Access Control"],
+      "cwe": ["CWE-1188 Insecure Default Initialization of Resource"],
+      "other": ["admission-control and configuration-drift analyses in multi-tenant systems"]
+    }
+  },
+  "classification": {
+    "modal_class": ["safety"],
+    "deontic_role": ["invariant", "guarantee", "constraint", "policy"],
+    "domains": ["defi-lending", "defi", "contract", "governance", "access-control"],
+    "abstraction_levels": ["contract", "protocol", "governance"],
+    "verification_modalities": ["smt", "model-checking", "symbolic-execution", "static-dataflow"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "Creation of a protocol instance follows the declared admission policy; fields declared immutable never change after creation; registries declared monotone only ever grow; and every bounded parameter stays within its configured bound at every point, including at the moment it is set. The record is about the lifecycle of configuration rather than about any one parameter's value, and it makes each of the four policies a declared, checkable commitment rather than an emergent property of the code.",
+    "system_theoretic": "An instance is created from a parameter tuple drawn from an admission relation. The profile partitions the tuple into immutable and mutable fields, declares which registries are monotone, and gives each bounded parameter a domain. The property is the conjunction of: creation succeeds only for tuples the admission relation admits; the immutable projection of an instance is constant across every subsequent transition; monotone registries are non-decreasing under set inclusion; and each bounded parameter's value lies in its domain in every reachable state.",
+    "security": "Configuration is the layer where an attacker with partial authority converts a small privilege into an unbounded one. Five families matter. Unadmitted instance: an instance is created with a parameter combination the admission relation was meant to exclude — an unvetted rate source, a threshold outside the intended range — after which every downstream guarantee is stated over parameters nobody vetted. Immutability violation: a field the design treats as fixed can in fact be updated, so positions taken under one risk profile are silently re-based onto another. Registry retraction: a registry the design treats as append-only can have entries removed, breaking instances that already depend on them and stranding their positions. Bound evasion at the setter: a parameter is validated on some paths and not others, or validated against a stale bound. Initialization gap: an instance exists in a state where a bounded parameter has not yet been set and its default is outside the domain.",
+    "execution_semantics": "Concretely the creation entry point and its admission checks, the storage layout distinguishing fields written once from fields with setters, the registry mutation paths, and the validation on each parameter setter. Violations live in: an admission check that consults a registry snapshot rather than its current contents; an update path reaching a field the design documents as immutable; a registry removal path that exists for operational reasons; a setter whose bound check is applied before rather than after a scaling step; and a creation path that leaves a parameter unset.",
+    "formal_verification": "Each clause is a 1-safety obligation. Immutability and monotonicity are frame conditions provable by enumerating write paths to the relevant state and showing none exists, or exists only under the declared policy — a static-dataflow question as much as a semantic one. Admission and bound clauses are guarded post-conditions provable by SMT. The clauses are cheap to verify and expensive to omit, and they are exactly the clauses a bounded reachability profile tends to cover well, since the configuration state space is small."
+  },
+  "formalization": {
+    "signature": "Instances M; parameter tuples P partitioned into immutable projection imm and mutable projection mut; admission relation Admit subset of P; registries Reg with contents : Reg x State -> Set; monotone registry subset MonoReg; bounded parameters BP with domain dom : BP -> Set; creation step create; transition relation step.",
+    "symbols": ["M", "P", "imm", "mut", "Admit", "Reg", "contents", "MonoReg", "BP", "dom", "create", "step", "State"],
+    "first_order_logic": "Admission:  forall p, s, s' . create(p, s, s') succeeds  ->  Admit(p) evaluated against contents(-, s), not against a snapshot.\nImmutability:  forall m, s, s' . step(s, s') and m exists in s  ->  imm(m, s') = imm(m, s).\nRegistry monotonicity:  forall r in MonoReg, s, s' . step(s, s')  ->  contents(r, s) subset-of contents(r, s').\nParameter bound:  forall b in BP, s . value(b, s) in dom(b), including immediately after any setter and immediately after creation.\nNo initialization gap:  forall m, s . m exists in s  ->  every b in BP associated with m has been set and lies in dom(b).\nUniqueness:  creation does not produce two distinct instances with the same immutable projection unless the profile declares duplicates admissible.",
+    "temporal_logic": {
+      "ltl": "G( immutableProjectionUnchanged and registriesNonDecreasing and everyBoundedParameterInDomain )",
+      "ctl": "AG( instanceExists -> AG( immutableProjection = immutableProjectionAtCreation ) )",
+      "fairness": "n/a — safety property"
+    },
+    "hoare": [
+      { "pre": "not Admit(p)", "command": "create(p)", "post": "the operation failed and no instance exists for p" },
+      { "pre": "instance m exists with imm(m) = I", "command": "any transition", "post": "imm(m) = I" },
+      { "pre": "registry r in MonoReg with contents C", "command": "any transition", "post": "contents(r) contains C" },
+      { "pre": "true", "command": "set bounded parameter b to v", "post": "value(b) in dom(b), and the operation failed if v was outside it" }
+    ],
+    "state_machine": "Configuration state is partitioned into a write-once region, a monotone region, and a bounded-mutable region. The property is that every transition respects the region it writes to: no edge writes the write-once region after creation, no edge shrinks the monotone region, and every edge into the bounded region lands inside the domain.",
+    "type_theoretic": "The immutable projection as a value fixed at construction and typed as such, so a write is not expressible; monotone registries as a grow-only structure whose only operation is a join; bounded parameters as refinement types whose setters carry the domain proof obligation.",
+    "algebraic": "Monotone registries form a join-semilattice under inclusion and transitions act as monotone maps on it; the immutable projection is invariant under the whole transition monoid, which is the algebraic content of immutability."
+  },
+  "relationships": [
+    { "type": "refines", "target": "BPO:0040", "note": "Specializes access-control correctness to the configuration lifecycle by adding what generic authority checking does not define: instance immutability, registry monotonicity, and numeric parameter bounds." },
+    { "type": "dependsOn", "target": "BPO:0030", "note": "Immutability of a field is only meaningful if the storage holding it cannot be re-laid-out by an upgrade; otherwise the frame condition is checked against a layout that can change underneath it." },
+    { "type": "composesWith", "target": "BPO:0112", "note": "The fee cap is a bounded parameter here; that the fee is also bounded by the value actually generated is a separate clause belonging to accrual, and neither implies the other." },
+    { "type": "mitigates", "target": "ATK:unadmitted-instance" },
+    { "type": "mitigates", "target": "ATK:immutability-violation" },
+    { "type": "mitigates", "target": "ATK:registry-retraction" }
+  ],
+  "attack_surface": [
+    { "class": "unadmitted-instance", "pattern": "an instance is created with a parameter combination the admission relation was meant to exclude", "incident_refs": [], "notes": "Every downstream guarantee is then stated over unvetted parameters." },
+    { "class": "immutability-violation", "pattern": "a field the design treats as fixed has a reachable write path", "incident_refs": [], "notes": "Re-bases existing positions onto a risk profile their holders never accepted." },
+    { "class": "registry-retraction", "pattern": "an append-only registry has a removal path, stranding instances that depend on removed entries", "incident_refs": [], "notes": "Usually introduced for operational convenience." },
+    { "class": "bound-evasion", "pattern": "a parameter is validated on one setter path and not another, or against a stale bound", "incident_refs": [], "notes": "The bound clause must hold immediately after every setter, not merely at rest." },
+    { "class": "initialization-gap", "pattern": "an instance exists with a bounded parameter unset and a default outside its domain", "incident_refs": [], "notes": "The no-initialization-gap clause exists because 'unset' is often not the same as 'zero'." },
+    { "class": "snapshot-admission", "pattern": "the admission check consults a cached registry snapshot rather than current contents", "incident_refs": [], "notes": "Admits parameters that were, but are no longer, acceptable." }
+  ],
+  "observability": {
+    "events": ["instance creation events carrying the full parameter tuple", "registry mutation events", "parameter update events carrying old and new values"],
+    "metrics": ["count of instances whose immutable projection differs from its creation value (must be zero)", "registry cardinality over time (must be non-decreasing for monotone registries)", "count of bounded parameters observed outside their domain (must be zero)"],
+    "invariant_checkpoints": ["post-creation: admission relation satisfied and every bounded parameter set and in domain", "any transition: immutable projection unchanged", "any transition: monotone registries non-decreasing"],
+    "runtime_assertions": ["assert the admission relation against current registry contents at creation", "assert bound membership immediately after every setter", "assert no write path reaches the immutable projection after creation"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Write-path enumeration for immutability and monotonicity", "tools": ["static dataflow analysis", "symbolic execution"], "strength": "proof", "notes": "Enumerate every path writing the immutable projection or removing from a monotone registry and prove none is reachable post-creation. This is the cheapest high-value check in the record." },
+      { "approach": "Guarded post-condition proof for admission and bounds", "tools": ["SMT-backed verifiers", "Certora Prover"], "strength": "proof", "notes": "Prove creation implies the admission relation and every setter implies domain membership." },
+      { "approach": "Complete finite reachability over the configuration state", "tools": ["explicit-state model checkers", "ProB"], "strength": "bounded-proof", "notes": "The configuration state space is small, so exhaustive coverage within a realistic bound is achievable here more than anywhere else in the lending block." },
+      { "approach": "Operation-local constraint checking of setters", "tools": ["operation-level CBC"], "strength": "bounded-proof", "notes": "Confirms each setter rejects out-of-domain values over the enumerated inputs. It says nothing about which configurations are reachable and must not be labelled exhaustive." }
+    ],
+    "testability": ["creation with an unadmitted parameter tuple fails", "no reachable operation sequence changes an instance's immutable projection", "no reachable operation sequence removes an entry from a monotone registry", "every setter rejects values outside the declared domain, including at the boundary", "no instance can exist with an unset bounded parameter"]
+  },
+  "enforcement": {
+    "runtime": ["evaluate admission against current registry contents rather than a snapshot", "validate bounds after any scaling step, not before", "set every bounded parameter within the creation step"],
+    "static": ["prove no write path reaches the immutable projection after creation", "prove monotone registries have no removal path", "prove every setter's bound check dominates its write"],
+    "design_patterns": ["derive instance identity from the immutable projection so a change is structurally impossible rather than merely forbidden", "grow-only registries with no removal operation defined at all", "declare parameter domains as named constants shared by the setter and the specification"]
+  },
+  "assumptions": [
+    { "kind": "trust", "statement": "Authorities able to mutate registries and bounded parameters are correctly controlled.", "discharged_by": "BPO:0040" },
+    { "kind": "environmental", "statement": "Storage holding the immutable projection is not re-laid-out by an upgrade.", "discharged_by": "BPO:0030" },
+    { "kind": "economic", "statement": "The declared parameter domains reflect the design's intended risk limits. The record enforces the bound; it does not establish that the bound is the right one.", "discharged_by": null }
+  ],
+  "provenance": {
+    "authors": ["BPO seed"],
+    "created": "2026-08-08",
+    "confidence": "draft",
+    "sources": ["admission-control and configuration-drift analyses in multi-tenant systems", "a collateralized-lending B-method verification study"],
+    "notes": "Separated from BPO:0040 because generic access-control correctness governs who may act, while this record governs what the resulting configuration may become — immutability, monotonicity, and numeric bounds are frame and domain conditions that an authority check does not express. The fee-cap clause here is a domain bound only; the separate requirement that a fee not exceed generated value lives in BPO:0112, and neither implies the other."
+  }
+}

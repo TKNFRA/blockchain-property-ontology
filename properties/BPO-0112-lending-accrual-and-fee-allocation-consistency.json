@@ -1,0 +1,98 @@
+{
+  "id": "BPO:0112",
+  "slug": "lending-accrual-and-fee-allocation-consistency",
+  "title": "Lending Accrual and Fee-Allocation Consistency (Generated Value Bounds the Fee)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["interest accrual correctness", "fee cannot exceed interest", "accrual monotonicity", "no retroactive accrual"],
+    "academic_terms": ["discrete-time accrual relation", "monotone accumulator", "conservative allocation of generated quantity"],
+    "industry_terms": ["interest index update", "protocol fee share", "accrue before act"],
+    "external_refs": {
+      "dasp": ["DASP-3 Arithmetic (accrual precision and fee rounding)"],
+      "other": ["compound interest discretization error analysis", "accumulator-index designs in pooled lending"]
+    }
+  },
+  "classification": {
+    "modal_class": ["safety"],
+    "deontic_role": ["invariant", "guarantee", "constraint"],
+    "domains": ["defi-lending", "defi", "contract", "application"],
+    "abstraction_levels": ["economic", "contract"],
+    "verification_modalities": ["smt", "model-checking", "abstract-interpretation", "symbolic-execution", "fuzzing"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "When a lending instance accrues value over elapsed time, the post-state balances equal a declared accrual-and-allocation relation applied to the pre-state; the quantity allocated as a fee never exceeds the quantity actually generated; and the instance's notion of time, its outstanding debt, and the claims of protected creditors each move only in the directions the profile declares. The accrual relation itself is a parameter: the record requires that one be declared and obeyed, not that any particular rate model or discretization be used.",
+    "system_theoretic": "Accrual is a transition parameterized by an elapsed-time measure. The profile supplies an accrual function from pre-state and elapsed time to a generated quantity, and an allocation function distributing that quantity among claim classes. The property is the conjunction of an exactness clause (post-state equals the declared relation applied to the pre-state, with no unaccounted term), a bound clause (the fee share of the allocation is bounded above by the generated quantity), and monotonicity clauses (the time measure is non-decreasing; the debt measure is non-decreasing across a pure accrual step; protected claims do not decrease).",
+    "security": "Accrual is where a lending system creates value, and any path that creates more than the declared relation permits is an inflation bug reachable without any external actor. Four families matter. Retroactive or repeated accrual: the elapsed-time measure moves backwards or the same interval is charged twice, so debt grows without time passing. Unbounded fee: the allocation issues fee claims exceeding what was generated, which is issuance of unbacked claims by another name. Asymmetric application: the generated quantity is added to one side of the ledger and not the other, breaking the fold before any conversion sees it. Denominator timing: the fee claim is computed against a denominator taken at the wrong point in the accrual step, so the fee silently dilutes existing claim holders.",
+    "execution_semantics": "Concretely an accrual routine invoked at the start of state-changing operations, computing an increment from a rate source and an elapsed interval, adding it to both the creditor-side and debtor-side measures, and issuing a fee claim from the increment. Violations live in: an elapsed-time source that is not monotone; an accrual path reachable more than once per interval; a fee computation whose denominator is taken before rather than after the increment (or the reverse) contrary to the declared relation; and a discretization whose truncation error is not bounded, letting repeated small accruals drift from the declared relation.",
+    "formal_verification": "The exactness clause is an equality between the post-state and a declared function of the pre-state, so it is SMT-tractable once the accrual relation is written as an executable reference; the practical difficulty is that the reference is often a discretized approximation whose error must itself be bounded rather than ignored. The bound and monotonicity clauses are ordinary state invariants. Verifying only that some interest was added, without an independent post-state formula, is a common and weak result: it establishes that the transition is reachable, not that it is correct."
+  },
+  "formalization": {
+    "signature": "States State; instances M; elapsed-time measure T : State -> Time with ordering <=_T; accrual function Accrue : State x Time -> Q giving the generated quantity; allocation function Alloc : Q x State -> (Q_creditor, Q_fee); debt measure Debt : M x State -> Q; protected-claim measure Protected : M x State -> Q; declared discretization error bound eps.",
+    "symbols": ["State", "M", "T", "Time", "Accrue", "Alloc", "Debt", "Protected", "eps", "Q", "Q_creditor", "Q_fee"],
+    "first_order_logic": "Exactness:  forall m, s, s', dt . accrualStep(m, s, s', dt)  ->  postState(m, s') = declaredRelation(preState(m, s), Accrue(s, dt), Alloc).\nFee bound:  forall q, s . let (c, f) = Alloc(q, s) in f <= q and c + f = q.\nTime monotonicity:  forall s, s' . step(s, s')  ->  T(s) <=_T T(s').\nNo repeated interval:  forall m, s, s', dt . accrualStep(m, s, s', dt)  ->  dt = T(s) - lastAccrual(m, s) and lastAccrual(m, s') = T(s).\nDebt monotonicity under pure accrual:  forall m, s, s' . accrualStep(m, s, s', dt) and dt > 0  ->  Debt(m, s) <= Debt(m, s').\nProtected-claim monotonicity:  forall m, s, s' . accrualStep(m, s, s', dt)  ->  Protected(m, s) <= Protected(m, s').\nDiscretization bound:  the declared relation's deviation from the profile's ideal accrual is bounded by eps, and eps is stated with any result.",
+    "temporal_logic": {
+      "ltl": "G( feeBounded and timeNonDecreasing and (accrualStep -> postStateEqualsDeclaredRelation) )",
+      "ctl": "AG( AX( timeMeasure >= previousTimeMeasure ) )",
+      "fairness": "n/a — safety property"
+    },
+    "hoare": [
+      { "pre": "T(s) = t and lastAccrual(m) = t0 and t >= t0", "command": "accrue(m)", "post": "postState = declaredRelation(preState, Accrue(s, t - t0), Alloc) and lastAccrual(m) = t" },
+      { "pre": "generated quantity = q", "command": "allocate(q)", "post": "fee <= q and creditor + fee = q" },
+      { "pre": "lastAccrual(m) = t", "command": "accrue(m) with T(s) = t", "post": "no state change: a zero interval generates nothing" }
+    ],
+    "state_machine": "Annotate accrual edges with the elapsed interval consumed. The property is that each interval is consumed at most once, that the edge's effect equals the declared relation applied to the source state, and that the fee component of the allocation never exceeds the generated component.",
+    "type_theoretic": "The generated quantity as a linear resource produced by an accrual step and consumed exactly once by allocation; the fee claim is typed as a share of that resource, so an allocation exceeding it is not typeable.",
+    "algebraic": "Accrual composes over adjacent intervals: accruing over an interval then its successor equals accruing over their concatenation, up to the declared discretization bound. That composition law is what makes a non-monotone or repeated interval a detectable violation."
+  },
+  "relationships": [
+    { "type": "dependsOn", "target": "BPO:0110", "note": "The generated quantity is applied to aggregate ledgers; fold consistency must survive the accrual step or the exactness clause is checked against a corrupt pre-state." },
+    { "type": "dependsOn", "target": "BPO:0111", "note": "Fee claims are issued through a conversion; the allocation's fee bound can be defeated by an under-protected conversion direction at the issuance site." },
+    { "type": "dependsOn", "target": "BPO:0122", "note": "The generated quantity is derived from an external rate source; without that source's call contract the accrual relation has no well-defined input." },
+    { "type": "refines", "target": "BPO:0101", "note": "Accrual is a sanctioned value-creating flow; this record supplies the term that generic conservation leaves as an undefined issuance." },
+    { "type": "mitigates", "target": "ATK:retroactive-accrual" },
+    { "type": "mitigates", "target": "ATK:unbounded-fee" },
+    { "type": "mitigates", "target": "ATK:fee-denominator-dilution" }
+  ],
+  "attack_surface": [
+    { "class": "retroactive-accrual", "pattern": "a non-monotone time source or a re-enterable accrual path charges the same interval more than once", "incident_refs": [], "notes": "Time monotonicity and the no-repeated-interval clause together." },
+    { "class": "unbounded-fee", "pattern": "the allocation issues fee claims exceeding the generated quantity", "incident_refs": [], "notes": "Issuance of unbacked claims. The bound clause is the direct guard." },
+    { "class": "fee-denominator-dilution", "pattern": "the fee claim is computed against a denominator taken at the wrong point of the accrual step, diluting existing claim holders", "incident_refs": [], "notes": "The declared relation must fix the point; leaving it implicit is where this hides." },
+    { "class": "asymmetric-accrual-application", "pattern": "the generated quantity is added to the creditor measure but not the debtor measure, or the reverse", "incident_refs": [], "notes": "Breaks BPO:0110's fold before any conversion observes it." },
+    { "class": "unbounded-discretization-drift", "pattern": "repeated short accruals accumulate truncation error away from the ideal relation", "incident_refs": [], "notes": "Requires the error bound to be declared and proved, not assumed small." }
+  ],
+  "observability": {
+    "events": ["accrual events carrying elapsed interval, generated quantity, and allocation split", "rate-source read events"],
+    "metrics": ["generated quantity minus allocated total (must be the identity)", "fee as a share of generated quantity (must respect the declared bound)", "cumulative deviation from the ideal accrual relation"],
+    "invariant_checkpoints": ["post-accrual: post-state equals the declared relation applied to the pre-state", "post-accrual: last-accrual marker advanced to the current time measure", "any state: time measure non-decreasing"],
+    "runtime_assertions": ["assert fee does not exceed the generated quantity", "assert a zero elapsed interval produces no state change", "assert the time measure never decreases"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Independent post-state formula", "tools": ["SMT-backed verifiers", "Certora Prover"], "strength": "proof", "notes": "Prove the post-state equals a separately written reference relation. Checking only that the transition is reachable and that debt increased is materially weaker and should not be reported as accrual correctness." },
+      { "approach": "Complete finite reachability with non-zero accrual paths", "tools": ["explicit-state model checkers", "ProB"], "strength": "bounded-proof", "notes": "Exhaustive over a finite time/quantity profile, with the profile chosen so that non-zero interest and non-zero fee paths are actually reachable. A profile in which the fee is always zero makes the bound clause vacuous." },
+      { "approach": "Golden-trace regression against an exact reference", "tools": ["deterministic exact-arithmetic reference implementations"], "strength": "heuristic-evidence", "notes": "A curated trace reaching a known exact value. Demonstrates the relation on one path; it is not domain-exhaustive and must not be reported as such." },
+      { "approach": "Discretization-error bounding", "tools": ["interval analysis", "computer algebra"], "strength": "bounded-proof", "notes": "Bound the declared relation's deviation from the profile's ideal accrual over any admissible interval sequence." }
+    ],
+    "testability": ["a zero elapsed interval is a no-op", "the same interval cannot be charged twice across any reachable operation sequence", "the fee never exceeds the generated quantity, including at the extremes of the fee parameter", "accruing over two adjacent intervals matches accruing over their concatenation within the declared bound"]
+  },
+  "enforcement": {
+    "runtime": ["accrue at the entry of every state-changing operation so no path observes stale balances", "advance the last-accrual marker in the same indivisible step as the accrual", "assert the fee bound before issuing the fee claim"],
+    "static": ["prove the post-state relation against an independent reference", "prove the time measure is non-decreasing on every path", "prove the fee denominator is taken at the point the declared relation fixes"],
+    "design_patterns": ["one accrual routine rather than per-operation inline arithmetic", "declare the discretization and its error bound in the specification", "make the ideal accrual relation executable for differential testing"]
+  },
+  "assumptions": [
+    { "kind": "tooling", "statement": "Arithmetic on accrual intermediates is checked, so the generated quantity cannot wrap.", "discharged_by": "BPO:0060" },
+    { "kind": "environmental", "statement": "The elapsed-time measure available to the instance is monotone non-decreasing.", "discharged_by": null },
+    { "kind": "environmental", "statement": "The external rate source terminates and returns a value within its declared range.", "discharged_by": "BPO:0122" },
+    { "kind": "economic", "statement": "The declared discretization is an acceptable approximation of the profile's intended accrual for the intervals the deployment will actually see.", "discharged_by": null }
+  ],
+  "provenance": {
+    "authors": ["BPO seed"],
+    "created": "2026-08-08",
+    "confidence": "draft",
+    "sources": ["discrete-time interest accrual analysis", "accumulator-index designs in pooled lending", "a collateralized-lending B-method verification study"],
+    "notes": "Deliberately does not fix a rate model, a discretization, or a fee denominator convention — a specialization binds all three. The record's contribution is requiring that the relation be declared and that the fee be bounded by what was generated, which is the clause a generic conservation invariant leaves open."
+  }
+}

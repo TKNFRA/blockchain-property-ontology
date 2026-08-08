@@ -1,0 +1,97 @@
+{
+  "id": "BPO:0113",
+  "slug": "collateralized-position-health-preservation",
+  "title": "Collateralized Position Health Preservation (Risk-Increasing Transitions Establish the Health Predicate)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["solvency check on borrow", "collateralization invariant", "no undercollateralized exit", "health factor preservation"],
+    "academic_terms": ["guarded transition establishing a post-state predicate", "margin constraint under a valuation function", "capacity-bounded liability"],
+    "industry_terms": ["loan-to-value check", "health factor", "collateral ratio", "borrowing power"],
+    "external_refs": {
+      "dasp": ["DASP-2 Access Control (when the check is omitted on a path)"],
+      "other": ["margin and haircut practice in collateralized finance"]
+    }
+  },
+  "classification": {
+    "modal_class": ["safety"],
+    "deontic_role": ["invariant", "guarantee", "constraint"],
+    "domains": ["defi-lending", "defi", "contract", "economic"],
+    "abstraction_levels": ["economic", "contract"],
+    "verification_modalities": ["smt", "model-checking", "symbolic-execution", "abstract-interpretation", "fuzzing"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "Every successful transition that increases the risk of a collateralized position establishes the protocol-defined health predicate in the post-state. The predicate compares a debt valuation against a collateral capacity under a declared valuation source, scale, haircut, rounding direction, and comparator. This record requires that the predicate hold after every risk-increasing operation; it does not choose the comparator, the haircut, or the valuation source, and it makes no claim that the valuation is correct.",
+    "system_theoretic": "Partition operations into risk-increasing and risk-non-increasing with respect to a position. The profile supplies a debt valuation function, a collateral capacity function, and a comparator relating them. The property is a guarded post-condition: on every successful risk-increasing edge, the post-state satisfies the health predicate for the affected position. It is deliberately not stated as a global invariant, because a position may become unhealthy without any transition at all — through a change in the valuation input — and requiring the predicate to hold in every reachable state would be a claim about the environment rather than about the system.",
+    "security": "The gap between 'the check exists' and 'the check is established on every risk-increasing path' is where undercollateralized borrowing lives. Five families matter. Missing guard on a path: an operation that increases debt or removes collateral without evaluating the predicate, typically a newer or administrative entry point. Stale inputs: the predicate is evaluated against balances not yet updated by accrual, so the debt valuation understates. Rounding inversion: debt is rounded down or capacity rounded up, making a position that is marginally unhealthy evaluate as healthy. Comparator ambiguity: whether equality is healthy is left implicit, so the boundary case differs between the check and the liquidation eligibility test. Delegated risk increase: an authorized third party increases a position's risk on a path where the predicate is evaluated for the caller rather than the position owner.",
+    "execution_semantics": "Concretely a predicate evaluated at the end of borrow and collateral-withdrawal paths, reading a valuation, scaling it, applying a threshold, and comparing against outstanding debt. Violations live in: paths that mutate risk without reaching the predicate; a predicate evaluated before rather than after accrual; rounding directions chosen per convenience rather than conservatively; and a boundary convention that disagrees with the liquidation eligibility test, creating positions that are neither borrowable-against nor liquidatable.",
+    "formal_verification": "A guarded post-condition, SMT-tractable once the valuation and capacity functions are expressed symbolically: for each risk-increasing operation, prove the predicate holds in the post-state or the operation fails. The valuation source should be modelled as an unconstrained input within its declared range rather than a fixed value, otherwise the proof establishes health only for a valuation that will not occur. Under bounded checking the profile must admit reachable states in which the predicate is false, or the result is vacuous: a bound in which no position can ever become unhealthy proves nothing about the guard."
+  },
+  "formalization": {
+    "signature": "Instances M; accounts U; states State; operations Op with risk-increasing subset RiskInc; debt valuation D : M x U x State -> Val; collateral capacity C : M x U x State -> Val; comparator kappa; valuation source V; scale sigma; haircut/threshold theta; rounding policy dir; health predicate Healthy.",
+    "symbols": ["M", "U", "State", "Op", "RiskInc", "D", "C", "kappa", "V", "sigma", "theta", "dir", "Healthy"],
+    "first_order_logic": "Health predicate:  Healthy(m, u, s)  ==  D(m, u, s) kappa C(m, u, s).\nGuarded post-condition:  forall o in RiskInc, m, u, s, s' . step(o, m, u, s, s') and o succeeds  ->  Healthy(m, u, s').\nConservative rounding obligation:  the profile's rounding policy dir rounds D away from health and C toward it, so a marginal position never evaluates as healthy by rounding alone.\nBoundary agreement:  the comparator kappa used here and the eligibility comparator used by the liquidation rule are the same relation, so no position is simultaneously non-borrowable and non-liquidatable.\nNon-vacuity obligation:  the verification profile admits reachable states in which Healthy is false; otherwise the guarded post-condition is trivially satisfied.\nSeparation:  this record constrains the use of V, sigma and theta; it asserts nothing about whether V reports a correct value.",
+    "temporal_logic": {
+      "ltl": "G( riskIncreasingSucceeded -> healthyInPostState )",
+      "ctl": "AG( EX(riskIncreasing) -> AX( riskIncreasingSucceeded -> healthy ) )",
+      "fairness": "n/a — safety property"
+    },
+    "hoare": [
+      { "pre": "true", "command": "any operation in RiskInc on (m, u)", "post": "Healthy(m, u) or the operation failed" },
+      { "pre": "accrual pending on m", "command": "any operation in RiskInc on (m, u)", "post": "Healthy(m, u) evaluated against post-accrual balances, not stale ones" }
+    ],
+    "state_machine": "Partition the transition relation by risk direction with respect to each position. The property is that every successful edge in the risk-increasing partition lands in the Healthy region for the affected position. Edges in the other partition carry no obligation, and no edge is required to keep other positions healthy.",
+    "type_theoretic": "A position as a refinement type indexed by its health witness; risk-increasing operations are typed as functions that must re-establish the witness, and are otherwise ill-typed.",
+    "algebraic": "Capacity is a monotone, positively homogeneous function of collateral under a fixed valuation; the health region is upward-closed in capacity and downward-closed in debt, which is what makes the conservative rounding obligation well-posed."
+  },
+  "relationships": [
+    { "type": "dependsOn", "target": "BPO:0111", "note": "Debt and capacity are computed through conversions; an under-protected conversion direction defeats the conservative rounding obligation at the point of evaluation." },
+    { "type": "dependsOn", "target": "BPO:0121", "note": "The valuation source is external. This record constrains how a returned value is used; it does not establish that the value is right, and the separation is deliberate." },
+    { "type": "dependsOn", "target": "BPO:0040", "note": "Delegated risk-increasing operations must evaluate the predicate for the position owner, not the caller, which requires the authority relation to be sound." },
+    { "type": "composesWith", "target": "BPO:0114", "note": "Health preservation and liquidation share a comparator. If the two boundary conventions disagree, positions exist that can neither be borrowed against nor liquidated." },
+    { "type": "mitigates", "target": "ATK:undercollateralized-borrow" },
+    { "type": "mitigates", "target": "ATK:stale-health-input" },
+    { "type": "mitigates", "target": "ATK:health-rounding-inversion" }
+  ],
+  "attack_surface": [
+    { "class": "undercollateralized-borrow", "pattern": "a risk-increasing path does not evaluate the health predicate at all", "incident_refs": [], "notes": "Usually a newer or administrative entry point that bypasses the common path." },
+    { "class": "stale-health-input", "pattern": "the predicate is evaluated against balances not yet updated by accrual", "incident_refs": [], "notes": "Understates debt by exactly the pending accrual." },
+    { "class": "health-rounding-inversion", "pattern": "debt rounded toward health or capacity rounded away from it, so a marginal position passes", "incident_refs": [], "notes": "The conservative rounding obligation is the direct guard." },
+    { "class": "comparator-boundary-disagreement", "pattern": "the borrow-side and liquidation-side comparators differ at equality", "incident_refs": [], "notes": "Creates positions that are neither borrowable-against nor liquidatable." },
+    { "class": "delegated-risk-increase", "pattern": "an authorized party increases a position's risk while the predicate is evaluated for the caller", "incident_refs": [], "notes": "The predicate must be indexed by the position, not the transaction initiator." }
+  ],
+  "observability": {
+    "events": ["risk-increasing operation events carrying the resulting debt and capacity", "valuation read events with the value and its scale"],
+    "metrics": ["distribution of capacity minus debt across positions", "count of positions failing the predicate (expected non-zero; the guard is on transitions, not on rest states)", "count of risk-increasing operations that succeeded with a failing post-state predicate (must be zero)"],
+    "invariant_checkpoints": ["post-risk-increase: health predicate holds for the affected position", "pre-evaluation: accrual applied", "boundary: the comparator matches the liquidation eligibility comparator"],
+    "runtime_assertions": ["assert the health predicate at the exit of every risk-increasing path", "assert the predicate is evaluated for the position owner rather than the caller"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Guarded post-condition proof per operation", "tools": ["SMT-backed verifiers", "Certora Prover", "Halmos"], "strength": "proof", "notes": "Model the valuation as an unconstrained input within its declared range. Fixing it to one value proves health only for a valuation that will not occur." },
+      { "approach": "Complete finite reachability with a shock witness", "tools": ["explicit-state model checkers", "ProB"], "strength": "bounded-proof", "notes": "The profile must admit reachable states where the predicate is false, and the result should exhibit that witness. Without it the guarded post-condition is vacuously satisfied and the check proves nothing." },
+      { "approach": "Path enumeration for guard coverage", "tools": ["symbolic execution", "static call-graph analysis"], "strength": "bounded-proof", "notes": "Enumerate every path that increases risk and prove each reaches the predicate. This is the check that catches the missing-guard family." },
+      { "approach": "Boundary differential testing", "tools": ["Echidna", "Foundry invariant tests"], "strength": "high-coverage-evidence", "notes": "Drive positions to the exact comparator boundary and confirm the borrow-side and liquidation-side conventions agree." }
+    ],
+    "testability": ["no risk-increasing operation succeeds leaving the position outside the health region", "the predicate is evaluated after accrual on every path", "a position exactly at the comparator boundary is treated consistently by the borrow and liquidation rules", "a delegated risk increase is evaluated against the position owner"]
+  },
+  "enforcement": {
+    "runtime": ["evaluate the predicate at the exit of every risk-increasing path", "accrue before evaluating", "round debt away from health and capacity toward it"],
+    "static": ["enumerate risk-increasing paths and prove each reaches the predicate", "prove the comparator matches the liquidation eligibility comparator", "prove rounding directions are conservative at both evaluation sites"],
+    "design_patterns": ["one health predicate shared by the borrow-side and liquidation-side checks rather than two implementations", "declare the comparator's treatment of equality explicitly", "index the predicate by position, never by caller"]
+  },
+  "assumptions": [
+    { "kind": "environmental", "statement": "The valuation source returns a well-formed value in the declared unit and scale.", "discharged_by": "BPO:0121" },
+    { "kind": "economic", "statement": "The valuation reported is an acceptable estimate of realizable value. This record does not establish it, and health preservation under a manipulated valuation is not a claim it makes.", "discharged_by": null },
+    { "kind": "tooling", "statement": "Arithmetic in the valuation and capacity computation is checked.", "discharged_by": "BPO:0060" },
+    { "kind": "environmental", "statement": "Accrual has been applied before the predicate is evaluated.", "discharged_by": "BPO:0112" }
+  ],
+  "provenance": {
+    "authors": ["BPO seed"],
+    "created": "2026-08-08",
+    "confidence": "draft",
+    "sources": ["margin and haircut practice in collateralized finance", "a collateralized-lending B-method verification study"],
+    "notes": "The separation between health preservation and valuation correctness is the point of this record and is stated in the formalization rather than left to prose. Stated as a guarded post-condition rather than a global invariant deliberately: a position can become unhealthy with no transition at all, and a record claiming otherwise would be asserting something about the environment."
+  }
+}

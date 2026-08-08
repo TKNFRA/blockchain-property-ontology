@@ -1,0 +1,89 @@
+{
+  "id": "BPO:0115",
+  "slug": "alternative-liquidation-mode-coherence",
+  "title": "Alternative Liquidation-Mode Coherence (Paired Inputs Yield Equivalent Observations)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["dual-input liquidation equivalence", "quotation-mode coherence", "seize-by-debt vs seize-by-collateral agreement"],
+    "academic_terms": ["relational equivalence of alternative interfaces", "2-safety observational agreement", "input-mode confluence"],
+    "industry_terms": ["specify repay amount or seize amount", "exclusive liquidation input modes"],
+    "external_refs": {
+      "other": ["confluence and observational-equivalence arguments for alternative APIs over one state machine"]
+    }
+  },
+  "classification": {
+    "modal_class": ["k-safety"],
+    "deontic_role": ["invariant", "guarantee", "constraint"],
+    "domains": ["defi-lending", "defi", "contract"],
+    "abstraction_levels": ["contract", "economic"],
+    "verification_modalities": ["model-checking", "smt", "symbolic-execution", "bounded-model-checking"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "When a protocol exposes more than one way to specify the same liquidation — for example by naming the liability to repay or by naming the collateral to seize — then inputs that denote the same intended settlement must produce observations within the protocol-declared equivalence relation and tolerance. The record applies only to protocols that expose such alternative modes; it is conditional by construction and carries no obligation for a single-mode design.",
+    "system_theoretic": "Let a liquidation operation admit a set of input modes, each with a pairing function mapping an input in one mode to the corresponding input in another under a given state. The property relates two executions from the same pre-state, one per mode, on paired inputs: the observable projections of their post-states must lie within a declared equivalence relation and tolerance. This is a 2-safety hyperproperty. It relates two traces and is not expressible as a predicate on any single execution, which is why it is separated from the single-trace liquidation safety of BPO:0114 rather than folded into it.",
+    "security": "Alternative input modes are a routine source of divergence because each is usually implemented as its own arithmetic path, and the two paths round in different places. Three families matter. Rounding divergence: paired inputs settle to quantities differing by more than the declared tolerance, so a liquidator selects the mode that favours them and extracts the difference on every liquidation. Boundary divergence: one mode clamps at the position's collateral and the other does not, so the exhaustion path is reachable through one mode only. Eligibility divergence: the two modes evaluate eligibility against differently-derived quantities, so a position is liquidatable through one mode and not the other. The last is the most damaging because it silently widens the eligibility set beyond what BPO:0113 and BPO:0114 jointly define.",
+    "execution_semantics": "Concretely two mutually exclusive input parameters on one entry point, where supplying one derives the other. Violations live in: derivation arithmetic that rounds in a different direction from the forward path; a clamp applied in one branch only; and an eligibility or incentive computation performed against the supplied quantity in one mode and the derived quantity in the other.",
+    "formal_verification": "A 2-safety obligation requiring self-composition, a relational verifier, or bounded exhaustive checking over paired executions. Single-trace tools cannot establish it: verifying each mode separately against BPO:0114 establishes that each is individually safe and says nothing about whether they agree. Reporting per-mode single-trace results as coherence evidence is a category error. Under bounded checking the profile must admit paired inputs that actually exercise both modes on the same pre-state; checking modes on unrelated states is not a relational result."
+  },
+  "formalization": {
+    "signature": "Input modes Mode; inputs In; pairing function pair : Mode x Mode x In x State -> In; liquidation step liq : Mode x In x State -> State; observation projection obs : State -> Obs; declared equivalence relation equiv on Obs with tolerance tau.",
+    "symbols": ["Mode", "In", "pair", "liq", "obs", "Obs", "equiv", "tau", "State"],
+    "first_order_logic": "Coherence:  forall m1, m2 in Mode, i in In, s in State .\n  let i2 = pair(m1, m2, i, s) in\n  liq(m1, i, s) = s1 and liq(m2, i2, s) = s2  ->  equiv(obs(s1), obs(s2), tau).\nPairing well-formedness:  pair is an involution up to tolerance:  pair(m2, m1, pair(m1, m2, i, s), s) equiv i within tau.\nEligibility agreement:  forall m1, m2, i, s . liq(m1, i, s) succeeds  <->  liq(m2, pair(m1, m2, i, s), s) succeeds.\nExclusivity:  the modes are mutually exclusive per invocation; supplying inputs for more than one mode is rejected rather than silently resolved.\nApplicability:  this record imposes no obligation when |Mode| = 1.",
+    "temporal_logic": {
+      "fairness": "n/a — hypersafety; no fairness assumption. Not expressible in single-trace LTL or CTL, which is why the temporal fields carry no formula."
+    },
+    "hoare": [
+      { "pre": "state = S and inputs i, pair(m1, m2, i, S) denote the same settlement", "command": "liq(m1, i) in one execution and liq(m2, pair(...)) in another, both from S", "post": "obs of the two post-states are equiv within tau" },
+      { "pre": "state = S", "command": "liq(m1, i) fails", "post": "liq(m2, pair(m1, m2, i, S)) from S also fails" }
+    ],
+    "state_machine": "Two edges out of the same source state, labelled by different modes on paired inputs, must land in states indistinguishable under the observation projection up to tolerance. The property constrains the pair of edges, never one edge alone.",
+    "type_theoretic": "The modes as two implementations of one abstract settlement interface, related by a logical relation whose fundamental lemma is exactly the coherence clause; the pairing function is the coercion witnessing the relation.",
+    "algebraic": "The pairing function is an isomorphism between the mode input domains up to tolerance, and the coherence clause states that the liquidation action commutes with it. Divergence is the failure of that square to commute.",
+    "hyperproperty": "2-safety. Relates two executions from a common pre-state on paired inputs and constrains their observable post-states. Establishing it requires self-composition or a relational encoding; per-mode single-trace verification against BPO:0114 does not imply it and must not be reported as though it did."
+  },
+  "relationships": [
+    { "type": "dependsOn", "target": "BPO:0114", "note": "Coherence is meaningful only between two modes that are each individually safe; this record adds agreement, it does not replace per-mode liquidation safety." },
+    { "type": "dependsOn", "target": "BPO:0111", "note": "The pairing function is a conversion; its approximation contract determines whether the declared tolerance is achievable at all." },
+    { "type": "mitigates", "target": "ATK:mode-arbitrage" },
+    { "type": "mitigates", "target": "ATK:eligibility-set-widening" }
+  ],
+  "attack_surface": [
+    { "class": "mode-arbitrage", "pattern": "paired inputs settle to different quantities, so a liquidator always selects the favourable mode", "incident_refs": [], "notes": "Extracted on every liquidation, not once. Small per-event divergence is still a systematic transfer." },
+    { "class": "eligibility-set-widening", "pattern": "a position is liquidatable through one mode and not the other", "incident_refs": [], "notes": "Silently widens the eligibility set beyond what BPO:0113 and BPO:0114 jointly define." },
+    { "class": "clamp-asymmetry", "pattern": "the collateral clamp is applied in one branch only, so the exhaustion path is reachable through one mode only", "incident_refs": [], "notes": "Also makes the residual clauses of BPO:0114 mode-dependent." },
+    { "class": "silent-dual-input", "pattern": "both mode inputs are supplied and one is silently ignored rather than the call being rejected", "incident_refs": [], "notes": "The exclusivity clause exists to make this a rejection rather than an interpretation." }
+  ],
+  "observability": {
+    "events": ["liquidation events carrying the mode used and both the supplied and derived quantities"],
+    "metrics": ["divergence between paired-mode settlements over sampled inputs (must lie within tolerance)", "count of inputs eligible in one mode only (must be zero)"],
+    "invariant_checkpoints": ["per liquidation: supplied and derived quantities agree with the pairing function within tolerance", "per invocation: exactly one mode's input is supplied"],
+    "runtime_assertions": ["assert exactly one mode input is non-empty", "assert the derived quantity re-derives the supplied one within tolerance"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Self-composition over paired executions", "tools": ["relational verifiers", "self-composition encodings", "bounded model checkers"], "strength": "bounded-proof", "notes": "The only sound automated route. Compose two copies of the liquidation transition from a shared pre-state on paired inputs and check the observation relation." },
+      { "approach": "Complete finite relational reachability", "tools": ["explicit-state model checkers", "ProB"], "strength": "bounded-proof", "notes": "Exhaustive over a finite input profile with both modes exercised from the same pre-state. Checking the modes on unrelated states is not a relational result and must not be reported as one." },
+      { "approach": "Differential fuzzing across modes", "tools": ["Echidna", "Foundry invariant tests"], "strength": "high-coverage-evidence", "notes": "Random paired inputs from a shared state, asserting the observation relation. Finds divergence quickly; establishes nothing about its absence." }
+    ],
+    "testability": ["paired inputs settle to observations within the declared tolerance from every reachable pre-state in the profile", "a position eligible in one mode is eligible in the other", "the collateral clamp behaves identically in both modes at the exhaustion boundary", "supplying both mode inputs is rejected"]
+  },
+  "enforcement": {
+    "runtime": ["derive the second quantity through the same conversion family the forward path uses", "apply clamps after derivation, in one shared branch", "reject invocations supplying more than one mode input"],
+    "static": ["relational proof or bounded exhaustive check of the coherence clause", "prove the eligibility computation reads the same derived quantity in both modes", "prove the pairing function is an involution within tolerance"],
+    "design_patterns": ["derive one mode from the other and implement one settlement path, rather than two parallel arithmetic paths", "declare the tolerance explicitly rather than assuming exact agreement", "make mode exclusivity a rejection, not a precedence rule"]
+  },
+  "assumptions": [
+    { "kind": "environmental", "statement": "The protocol genuinely exposes more than one liquidation input mode; the record is vacuous otherwise and should not be cited as satisfied by a single-mode design.", "discharged_by": null },
+    { "kind": "economic", "statement": "The declared tolerance is small enough that systematic mode selection is not profitable at the deployment's scale.", "discharged_by": null },
+    { "kind": "tooling", "statement": "Arithmetic in the pairing derivation is checked.", "discharged_by": "BPO:0060" }
+  ],
+  "provenance": {
+    "authors": ["BPO seed"],
+    "created": "2026-08-08",
+    "confidence": "draft",
+    "sources": ["observational-equivalence arguments for alternative interfaces over one state machine", "a collateralized-lending B-method verification study"],
+    "notes": "Kept separate from BPO:0114 deliberately. Liquidation safety is single-trace and applies to every design; mode coherence is 2-safety and applies only to designs exposing alternative inputs. Folding them together would either impose a vacuous obligation on single-mode protocols or, worse, invite a single-trace result to be reported as covering a relational claim."
+  }
+}

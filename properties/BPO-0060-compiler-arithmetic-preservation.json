@@ -36,6 +36,7 @@
   },
   "relationships": [
     { "type": "composesWith", "target": "BPO:0030", "note": "Storage-layout preservation is the sibling compiler-correctness fragment for state, not arithmetic." },
+    { "type": "composesWith", "target": "BPO:0111", "note": "Deliberate distinction, recorded to prevent a false equivalence: this record guarantees the compiled operation computes the source-level integer operation. It does NOT establish that the chosen integer operation is the correct rounding direction for its call site, which is what directed conversion safety requires. State typing in a formal model is likewise not compiler arithmetic preservation and should not be cross-walked to this record." },
     { "type": "mitigates", "target": "ATK:optimizer-miscompilation" },
     { "type": "mitigates", "target": "ATK:silent-overflow-wrap" }
   ],

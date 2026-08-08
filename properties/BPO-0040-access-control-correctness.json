@@ -59,6 +59,8 @@
     { "type": "composesWith", "target": "BPO:0030", "note": "Authority config (role/admin slots) must be collision-isolated to be tamper-evident." },
     { "type": "composesWith", "target": "BPO:0050", "note": "Pause/unpause authority is an instance of this policy." },
     { "type": "composesWith", "target": "BPO:0070", "note": "Upgrade/governance authorization composes with proof/voting integrity." },
+    { "type": "refinedBy", "target": "BPO:0118", "note": "Configuration integrity specializes authority correctness to the configuration lifecycle, adding instance immutability, registry monotonicity and numeric parameter bounds — frame and domain conditions an authority check does not express." },
+    { "type": "refinedBy", "target": "BPO:0117", "note": "Exit enabledness supplies the COMPLETENESS direction of a guard (precondition implies enabled); this record supplies the soundness direction (enabled implies authorized). Neither implies the other." },
     { "type": "mitigates", "target": "ATK:privilege-escalation" },
     { "type": "mitigates", "target": "ATK:unauthorized-admin-action" }
   ],

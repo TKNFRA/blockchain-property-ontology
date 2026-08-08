@@ -1,0 +1,96 @@
+{
+  "id": "BPO:0120",
+  "slug": "asset-interface-accounting-semantics",
+  "title": "Asset-Interface Accounting Semantics (Declared Movement Profile of an External Asset)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["token behaviour assumption", "transfer semantics contract", "non-rebasing assumption", "fee-on-transfer handling"],
+    "academic_terms": ["interface contract as an assume clause", "frame condition on an external module", "rely condition in rely-guarantee reasoning"],
+    "industry_terms": ["standard-conforming token", "fee-on-transfer token", "rebasing token", "return-value non-conformance"],
+    "external_refs": {
+      "eip": ["EIP-20 (interface shape; conformance is not implied by the interface)", "EIP-777 (reentrancy-capable transfer hooks)", "EIP-4626 (accounting wrapper semantics)"],
+      "swc": ["SWC-104 Unchecked Call Return Value"],
+      "other": ["rely-guarantee reasoning for external module contracts"]
+    }
+  },
+  "classification": {
+    "modal_class": ["safety"],
+    "deontic_role": ["assumption", "constraint", "environmental-assumption"],
+    "domains": ["defi-lending", "defi", "token", "contract"],
+    "abstraction_levels": ["contract", "protocol"],
+    "verification_modalities": ["smt", "model-checking", "symbolic-execution", "runtime-verification"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "Every successful and final transition of an external asset interface satisfies its declared sender, receiver, supply, fee-or-third-party, finality, mutation, and frame relation. This record is an assumption node, not a guarantee: its presence in the catalogue asserts that a consuming system must declare which movement profile it relies on, and that the profile must be discharged by evidence about the asset. It does not assert that any particular asset satisfies any particular profile. Exact movement — the receiver gains precisely what the sender loses, with no third-party term and no supply change — is one admissible profile among several, not a universal requirement.",
+    "system_theoretic": "The asset interface is an external module whose transitions the consuming system does not control. A profile is a conjunction of relations over the pre- and post-state of the balance function: how the sender's balance changes, how the receiver's changes, whether total supply changes, whether a third party receives a portion, whether the movement is final on return, whether balances may change without any call from the consumer, and which of the consumer's own state components the interface may not touch. Different profiles are appropriate for different assets; the property is that exactly one is declared and that every guarantee resting on the asset names it.",
+    "security": "Undeclared asset behaviour is the most common way a formally verified lending system fails in deployment: the proof is sound and the assumption is false. Five families matter. Silent fee: a portion is diverted on transfer, so the consumer credits more than it received and the backing relation is broken from the first deposit. Rebasing: balances change with no call from the consumer, so any accounted quantity captured at one time is stale at another. Non-final return: the interface returns before the movement is effective, so a check performed after return observes a state that will change. Non-conforming failure signalling: failure is reported by a return value the consumer does not inspect, so a failed movement is treated as a success. Reentrancy-capable transfer: the interface calls back into the consumer mid-transfer, turning a movement into a control-transfer edge and bringing BPO:0116's obligations into scope on a path nobody expected.",
+    "execution_semantics": "Concretely the transfer and balance-query entry points of an external asset contract, and the consuming system's beliefs about them. Violations live in: crediting the requested amount rather than the observed balance delta; caching a balance across a boundary at which it can change; treating a return-value-signalled failure as success; and performing a state update after a transfer whose interface can reenter.",
+    "formal_verification": "Discharge is not by verifying the consuming system — it is by evidence about the asset. Three routes exist and should be labelled distinctly. Interface-level proof: the asset's own implementation is verified against the declared profile. Deployment-level restriction: the consuming system admits only assets from a vetted registry, which converts this record into a BPO:0118 admission obligation. Defensive measurement: the consumer measures the observed balance delta rather than trusting the requested amount, which discharges the fee and non-finality clauses at runtime cost and leaves rebasing and reentrancy undischarged. Verifying the consumer under an assumed profile establishes a conditional result only, and the condition must travel with it."
+  },
+  "formalization": {
+    "signature": "Asset types T; accounts A; states State; balance function bal : T x A x State -> Q; total supply supply : T x State -> Q; transfer step xfer : T x A x A x Q x State -> State x Outcome; third-party term tp : T x Q x State -> Q; declared profile Profile; consumer frame ConsumerFrame.",
+    "symbols": ["T", "A", "State", "bal", "supply", "xfer", "tp", "Profile", "ConsumerFrame", "Outcome", "Q"],
+    "first_order_logic": "Profile obligation:  every guarantee resting on an asset t names exactly one Profile(t), and every clause below is instantiated by that profile rather than assumed.\nSender relation:  bal(t, from, s') = bal(t, from, s) - q  (exact-debit profile), or a declared alternative.\nReceiver relation:  bal(t, to, s') = bal(t, to, s) + q - tp(t, q, s), where tp is identically the additive identity in a no-third-party profile.\nSupply relation:  supply(t, s') = supply(t, s)  (supply-preserving profile), or a declared alternative.\nFinality:  a successful return implies the movement is effective in s'; no later state reverses it absent a further call.\nMutation:  in a non-rebasing profile, forall a, s, s' . step(s, s') and step is not an xfer on t involving a  ->  bal(t, a, s') = bal(t, a, s).\nFrame:  xfer does not modify any component of ConsumerFrame.\nControl transfer:  a profile permitting the interface to call back into the consumer brings BPO:0116's obligations into scope on that path.\nNegative form: none of these clauses is asserted to hold of any asset. They are the vocabulary in which a declaration is made.",
+    "temporal_logic": {
+      "ltl": "G( successfulTransfer -> (declaredSenderRelation and declaredReceiverRelation and declaredSupplyRelation and frameUnchanged) )",
+      "fairness": "n/a — safety property"
+    },
+    "hoare": [
+      { "pre": "bal(t, from) = x and bal(t, to) = y and profile is exact-debit, no-third-party, supply-preserving", "command": "xfer(t, from, to, q) succeeds", "post": "bal(t, from) = x - q and bal(t, to) = y + q and supply(t) unchanged" },
+      { "pre": "profile permits a third-party term", "command": "xfer(t, from, to, q) succeeds", "post": "the consumer credits the observed receiver delta, not q" },
+      { "pre": "profile is non-rebasing", "command": "any transition not an xfer on t", "post": "bal(t, a) unchanged for every a" }
+    ],
+    "state_machine": "The asset is an environment module composed with the consuming system. Its transitions are constrained only by the declared profile; anything the profile does not forbid, the environment may do. Verifying the consumer against a maximally permissive profile is the sound default and is usually infeasible, which is why the declaration matters.",
+    "type_theoretic": "The profile as a rely condition in a rely-guarantee pair: the consumer's guarantee is typed under the rely, and using an asset outside the declared profile is a failure to satisfy the rely rather than a bug in the consumer.",
+    "algebraic": "In a supply-preserving, no-third-party profile the balance function is a conserved measure and transfers are automorphisms of it. Fee and rebasing profiles break that structure in different ways, which is why they must be distinguished rather than merged into an 'approximately conserving' notion."
+  },
+  "relationships": [
+    { "type": "dependsOn", "target": "BPO:0118", "note": "Where the profile is discharged by restricting which assets may be used, the discharge becomes an admission obligation on instance configuration." },
+    { "type": "composesWith", "target": "BPO:0116", "note": "A profile permitting the interface to call back into the consumer turns a movement into a control-transfer edge, bringing callback settlement integrity into scope on that path." },
+    { "type": "composesWith", "target": "BPO:0101", "note": "The value measure quantifies over balances held under this interface; a fee or rebasing profile changes what conservation means without any fault in the consuming system." },
+    { "type": "mitigates", "target": "ATK:silent-transfer-fee" },
+    { "type": "mitigates", "target": "ATK:rebasing-balance-drift" },
+    { "type": "mitigates", "target": "ATK:unchecked-transfer-failure" }
+  ],
+  "attack_surface": [
+    { "class": "silent-transfer-fee", "pattern": "a portion is diverted on transfer and the consumer credits the requested rather than the observed amount", "incident_refs": [], "notes": "Breaks the backing relation from the first deposit." },
+    { "class": "rebasing-balance-drift", "pattern": "balances change with no call from the consumer, invalidating any cached accounted quantity", "incident_refs": [], "notes": "The mutation clause. Defensive measurement does not discharge it." },
+    { "class": "unchecked-transfer-failure", "pattern": "failure is signalled by a return value the consumer does not inspect", "incident_refs": [], "notes": "A failed movement treated as a success." },
+    { "class": "non-final-return", "pattern": "the interface returns before the movement is effective", "incident_refs": [], "notes": "Post-return checks observe a state that will change." },
+    { "class": "reentrant-transfer", "pattern": "the interface calls back into the consumer mid-transfer", "incident_refs": [], "notes": "Brings BPO:0116 into scope on a path the design did not treat as a callback." }
+  ],
+  "observability": {
+    "events": ["transfer events from the asset interface", "consumer-side credit events carrying both requested and observed amounts"],
+    "metrics": ["observed receiver delta minus requested amount (must be the identity under a no-third-party profile)", "balance drift with no intervening consumer call (must be the identity under a non-rebasing profile)"],
+    "invariant_checkpoints": ["post-transfer: observed deltas match the declared profile", "any transition: balances unchanged absent a consumer call, under a non-rebasing profile"],
+    "runtime_assertions": ["credit the observed balance delta rather than the requested amount", "assert the transfer outcome is inspected on every call site", "assert cached balances are re-read across any boundary the profile permits mutation at"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Interface-level proof of the asset implementation", "tools": ["SMT-backed verifiers", "Certora Prover"], "strength": "proof", "notes": "The only route that discharges the assumption outright. Requires the asset's source and applies to that implementation only." },
+      { "approach": "Admission restriction to a vetted registry", "tools": ["configuration review", "registry policy"], "strength": "bounded-proof", "notes": "Converts the assumption into a BPO:0118 admission obligation. Strength is bounded by the vetting process, which should be stated rather than implied." },
+      { "approach": "Defensive delta measurement", "tools": ["runtime verification"], "strength": "high-coverage-evidence", "notes": "Discharges the fee and non-finality clauses at runtime cost. Leaves rebasing and reentrancy undischarged, and a report should say so rather than claim the profile is satisfied." },
+      { "approach": "Consumer proof under an assumed profile", "tools": ["SMT-backed verifiers", "model checkers"], "strength": "bounded-proof", "notes": "Establishes a conditional result. The condition must travel with the result; a consumer proof under an exact-movement assumption is not evidence that the assumption holds." }
+    ],
+    "testability": ["a fee-charging asset does not cause the consumer to credit more than it received", "a rebasing asset does not leave a cached accounted quantity stale without detection", "a return-value-signalled failure is not treated as success", "a reentrancy-capable asset does not reach a consumer state update ordered after the transfer"]
+  },
+  "enforcement": {
+    "runtime": ["measure the observed balance delta rather than trusting the requested amount", "inspect the outcome at every call site", "re-read rather than cache balances across any boundary the profile permits mutation at"],
+    "static": ["enumerate asset call sites and prove each inspects the outcome", "prove no consumer state update is ordered after a transfer whose profile permits reentrancy", "prove the declared profile is named by every guarantee that rests on the asset"],
+    "design_patterns": ["declare the profile per asset in configuration rather than assuming one globally", "admission registry restricting assets to vetted profiles", "prefer observed-delta accounting so the fee clause is discharged structurally"]
+  },
+  "assumptions": [
+    { "kind": "environmental", "statement": "The external asset satisfies the movement profile the consuming system declares for it. This record names the obligation; it does not discharge it, and no consumer-side proof can.", "discharged_by": null },
+    { "kind": "environmental", "statement": "The asset interface does not modify the consumer's own state components named in the frame condition.", "discharged_by": null },
+    { "kind": "trust", "statement": "Where discharge is by admission restriction, the vetting process actually establishes the profile for each admitted asset.", "discharged_by": "BPO:0118" }
+  ],
+  "provenance": {
+    "authors": ["BPO seed"],
+    "created": "2026-08-08",
+    "confidence": "draft",
+    "sources": ["rely-guarantee reasoning for external module contracts", "non-conforming token behaviour catalogues", "a collateralized-lending B-method verification study"],
+    "notes": "An assumption node, deliberately, and one of the three dependency contracts in the lending block. Its deontic role is `assumption`, and its own assumptions carry null discharge so they surface in the validator's undischarged ledger — mislabelling it a guarantee would let a consuming system's proof appear to establish something about an asset it never examined. Exact movement is presented as one admissible profile rather than the default, because treating it as the default is exactly the error the record exists to prevent."
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "id": "BPO:0116",
+  "slug": "callback-settlement-integrity",
+  "title": "Callback Settlement Integrity (Pending Claims Cover the Custody Gap, Consumed Exactly Once)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["deferred settlement safety", "flash-callback integrity", "pull-payment completion", "temporary custody gap accounting"],
+    "academic_terms": ["two-phase commit with an explicit obligation token", "linear resource consumed exactly once", "frame condition across an untrusted call"],
+    "industry_terms": ["flash loan repayment check", "callback pattern", "pull over push settlement"],
+    "external_refs": {
+      "swc": ["SWC-107 Reentrancy"],
+      "dasp": ["DASP-1 Reentrancy"],
+      "cwe": ["CWE-841 Improper Enforcement of Behavioral Workflow"],
+      "other": ["linear-logic treatments of obligations that must be discharged exactly once"]
+    }
+  },
+  "classification": {
+    "modal_class": ["safety"],
+    "deontic_role": ["invariant", "guarantee", "obligation"],
+    "domains": ["defi-lending", "defi", "contract", "evm"],
+    "abstraction_levels": ["contract", "protocol"],
+    "verification_modalities": ["model-checking", "smt", "symbolic-execution", "bounded-model-checking", "fuzzing"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "When a system transfers control to untrusted code before a settlement completes, the resulting gap between what the system owes and what it holds must be covered by an explicit pending claim; the declared frame condition must hold across the untrusted call; and a successful settlement must consume each pending claim exactly once. The record permits deferred settlement rather than forbidding it — the obligation is that the deferral is accounted for, not that it does not happen.",
+    "system_theoretic": "At a stable boundary the accounted obligation for a settlement asset is bounded by the controlled balance. During a declared interaction phase this weakens: the obligation is bounded by the controlled balance combined with an explicit pending-claim term. The pending term is admissible only under three conditions — it is created before control transfers, it is owned by exactly one active frame, and it is consumed exactly once by a successful settlement. A frame condition additionally names the state components the untrusted call may not have changed, or may only have changed in declared ways, for the settlement to remain valid.",
+    "security": "This is the atomicity failure that survives a naive reentrancy guard. Four families matter. Uncovered gap: control transfers while the system's obligation exceeds what it holds and no pending claim records the difference, so a reentrant path observes a solvent-looking state that is not. Double consumption: two settlement paths each consume the same pending claim, so one obligation discharges two claims. Orphaned claim: the callback returns without the claim being consumed and without the transaction failing, leaving a permanent phantom receivable that inflates the accounted position. Frame violation: the untrusted call changes a state component the settlement computation already read, so the settlement executes against inputs that no longer hold — the classic read-then-call-then-write defect, which a mutex on the entry point does not address.",
+    "execution_semantics": "Concretely a state update, then a call into untrusted code, then a pull of the settlement asset back from the caller. Violations live in: a state update ordered after rather than before the call; a pending receivable that is not created, or created for the wrong amount; a settlement check that reads a balance the callback could have changed; and a claim-clearing path reachable more than once, or reachable without an actual settlement.",
+    "formal_verification": "A 1-safety property over a transition system with an explicit interaction phase, but one that requires the untrusted callback to be modelled as an arbitrary state transformer within its declared capabilities rather than as a specific implementation. Prove: the pending claim exists whenever the phase is active and the gap is non-zero; the frame condition holds across the call; and the claim-consumption transition is enabled at most once per claim. Under bounded checking both antecedent phases must be reachable in the profile, otherwise the phase-conditioned clauses are vacuous and the result must say so."
+  },
+  "formalization": {
+    "signature": "Settlement assets T; states State; phases Phase = {stable, interaction}; accounted obligation AccountedObligation : T x State -> Q; controlled balance ControlledBalance : T x State -> Q; pending claim PendingClaim : T x State -> Q; per-asset ordering preceq_t and aggregation oplus_t; frames Frame; owner : Claim -> Frame; frame condition FrameCond; untrusted transformer U.",
+    "symbols": ["T", "State", "Phase", "stable", "interaction", "AccountedObligation", "ControlledBalance", "PendingClaim", "preceq_t", "oplus_t", "Frame", "owner", "FrameCond", "U", "Claim"],
+    "first_order_logic": "Stable boundary:  forall t, s . phase(s) = stable  ->  AccountedObligation(t, s) preceq_t ControlledBalance(t, s).\nInteraction phase:  forall t, s . phase(s) = interaction  ->  AccountedObligation(t, s) preceq_t ( ControlledBalance(t, s) oplus_t PendingClaim(t, s) ).\nCreation before transfer:  forall c . created(c) precedes controlTransfer in every execution in which c exists.\nSingle ownership:  forall c . |{ f in Frame : owner(c) = f and active(f) }| = 1.\nExactly-once consumption:  forall c . settlementSucceeds  ->  consumed(c) exactly once; and no execution reaches a stable boundary with c outstanding.\nFrame condition:  forall s, s' . s' = U(s)  ->  FrameCond(s, s'), where FrameCond names the components the untrusted call may not have altered.\nNon-vacuity obligation:  the verification profile makes both phases reachable.",
+    "temporal_logic": {
+      "ltl": "G( interactionPhase -> (obligationCoveredByBalancePlusPendingClaim) )  and  G( claimCreated -> ( (not stableBoundary) U claimConsumed ) )  and  G( claimConsumed -> X G(not claimConsumedAgain) )",
+      "ctl": "AG( claimOutstanding -> not EF( stableBoundary and claimOutstanding ) )",
+      "fairness": "n/a — safety property. The record does not claim a callback will return."
+    },
+    "hoare": [
+      { "pre": "phase = stable and obligation preceq balance", "command": "update state, create pending claim, transfer control", "post": "phase = interaction and obligation preceq balance oplus pendingClaim" },
+      { "pre": "phase = interaction and claim c outstanding", "command": "settle", "post": "phase = stable and c consumed exactly once and obligation preceq balance" },
+      { "pre": "phase = interaction and claim c outstanding", "command": "untrusted call returns without settlement", "post": "the enclosing execution fails; no path reaches a stable boundary with c outstanding" }
+    ],
+    "state_machine": "A phase-annotated transition system. Claim creation and control transfer are one indivisible edge into the interaction phase; settlement is the only edge back to a stable boundary, and it consumes the claim. Any other edge into a stable boundary with an outstanding claim is a counterexample.",
+    "type_theoretic": "The pending claim as a linear resource: created by the transfer edge, owned by exactly one frame, and consumed by settlement. An execution reaching a stable boundary with the resource unconsumed is not typeable, and a second consumption has no resource to consume.",
+    "algebraic": "The obligation bound is a monoid inequality that weakens by the pending term during the interaction phase and re-tightens on consumption; the phase structure is the interval over which the weaker bound is the operative one."
+  },
+  "relationships": [
+    { "type": "refines", "target": "BPO:0020", "note": "Reentrancy safety's call-site-consistency reading. This record adds what a storage cutoff alone does not give: the explicit pending claim covering the custody gap and its exactly-once consumption. The atomicity reading of BPO:0020 is separately refined by BPO:0021." },
+    { "type": "dependsOn", "target": "BPO:0021", "note": "The exactly-once clause relies on a failed settlement leaving no partial consumption; without failure atomicity a claim can be half-consumed." },
+    { "type": "dependsOn", "target": "BPO:0110", "note": "The accounted obligation is derived from the ledger; a drifted fold makes the coverage inequality meaningless." },
+    { "type": "dependsOn", "target": "BPO:0120", "note": "The controlled balance is measured through an external asset interface whose accounting semantics determine whether the pull actually settles." },
+    { "type": "mitigates", "target": "ATK:uncovered-custody-gap" },
+    { "type": "mitigates", "target": "ATK:double-claim-consumption" },
+    { "type": "mitigates", "target": "ATK:read-only-reentrancy" }
+  ],
+  "attack_surface": [
+    { "class": "uncovered-custody-gap", "pattern": "control transfers while the obligation exceeds the controlled balance with no pending claim recording the difference", "incident_refs": [], "notes": "A reentrant path observes a solvent-looking state that is not. The coverage inequality is the direct guard." },
+    { "class": "double-claim-consumption", "pattern": "two settlement paths consume the same pending claim", "incident_refs": [], "notes": "One obligation discharges two claims. Exactly-once is a linearity obligation, not a flag check." },
+    { "class": "orphaned-claim", "pattern": "the callback returns without settlement and without the enclosing execution failing", "incident_refs": [], "notes": "Leaves a permanent phantom receivable inflating the accounted position." },
+    { "class": "frame-violation", "pattern": "the untrusted call changes a component the settlement computation already read", "incident_refs": [], "notes": "Read-then-call-then-write. An entry-point mutex does not address it." },
+    { "class": "read-only-reentrancy", "pattern": "an observer reads the interaction-phase state and treats it as a stable boundary", "incident_refs": [], "notes": "Argues for the phase being externally observable rather than implicit." }
+  ],
+  "observability": {
+    "events": ["phase transition events", "pending-claim creation and consumption events carrying claim identity and amount"],
+    "metrics": ["outstanding pending claims at stable boundaries (must be zero)", "obligation minus balance during the interaction phase (must be covered by the pending term)", "claim consumption count per claim (must be exactly one)"],
+    "invariant_checkpoints": ["stable boundary: obligation within controlled balance and no claim outstanding", "interaction phase: obligation within balance plus pending claim", "post-settlement: claim consumed and phase returned to stable"],
+    "runtime_assertions": ["assert the pending claim is created in the same indivisible step as the control transfer", "assert no claim is outstanding at any stable boundary", "assert the frame condition components are unchanged after the untrusted call returns"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Phase-annotated model checking with an arbitrary callback", "tools": ["explicit-state model checkers", "ProB"], "strength": "bounded-proof", "notes": "Model the untrusted call as an arbitrary transformer within its declared capabilities, not as a specific implementation. Both phases must be reachable in the profile or the phase-conditioned clauses are vacuous." },
+      { "approach": "Temporal product for the exactly-once clause", "tools": ["LTL/CTL model checkers"], "strength": "bounded-proof", "notes": "The consumption clause is a temporal obligation over a claim's lifetime and is better checked as a product with the claim automaton than as a state assertion." },
+      { "approach": "Frame-condition proof across the call boundary", "tools": ["SMT-backed verifiers", "separation-logic tools"], "strength": "proof", "notes": "Prove the settlement computation does not read any component the callback may write, or re-reads it after return." },
+      { "approach": "Mutation of the ordering", "tools": ["mutation frameworks"], "strength": "heuristic-evidence", "notes": "Move the state update after the call and confirm the profile detects it. A mutation that survives means the ordering is not actually being checked." }
+    ],
+    "testability": ["no execution reaches a stable boundary with a pending claim outstanding", "a callback that attempts a second settlement on the same claim fails", "a callback that mutates a frame-condition component causes the enclosing execution to fail", "the coverage inequality holds at every point of the interaction phase"]
+  },
+  "enforcement": {
+    "runtime": ["create the pending claim and transfer control in one indivisible step", "pull settlement rather than relying on the callback to push", "assert no outstanding claim before returning to a stable boundary"],
+    "static": ["prove claim creation dominates every control-transfer edge", "prove the consumption transition is enabled at most once per claim", "prove the settlement computation's reads are disjoint from the callback's writable set, or are re-read after return"],
+    "design_patterns": ["explicit pending-claim record rather than an implicit balance-difference check", "phase made externally observable so read-only observers are not misled", "single settlement path that consumes the claim, rather than per-caller settlement logic"]
+  },
+  "assumptions": [
+    { "kind": "environmental", "statement": "A failed settlement leaves no partial claim consumption.", "discharged_by": "BPO:0021" },
+    { "kind": "environmental", "statement": "The settlement asset's interface moves the declared quantity when the pull succeeds.", "discharged_by": "BPO:0120" },
+    { "kind": "trust", "statement": "The callback is untrusted and may do anything within its declared capabilities, including reentering. The record's guarantees are stated against that adversary, not against a cooperative callback.", "discharged_by": null }
+  ],
+  "provenance": {
+    "authors": ["BPO seed"],
+    "created": "2026-08-08",
+    "confidence": "draft",
+    "sources": ["linear-logic treatments of obligations discharged exactly once", "pull-payment and two-phase settlement practice", "a collateralized-lending B-method verification study"],
+    "notes": "Refines the call-site-consistency half of BPO:0020 only; the atomicity half is refined by BPO:0021. A post-callback storage cutoff covers part of the reentrancy reading but does not supply the pending-claim accounting or the exactly-once consumption clause, and the two should not be conflated when reporting coverage."
+  }
+}

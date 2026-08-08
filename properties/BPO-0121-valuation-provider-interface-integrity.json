@@ -1,0 +1,99 @@
+{
+  "id": "BPO:0121",
+  "slug": "valuation-provider-interface-integrity",
+  "title": "Valuation-Provider Interface Integrity (Well-Formedness, Not Economic Correctness)",
+  "version": "0.1.0",
+  "status": "draft",
+  "identifiers": {
+    "aliases": ["oracle interface contract", "price feed well-formedness", "valuation freshness assumption", "scale and unit agreement"],
+    "academic_terms": ["interface contract as an assume clause", "sampling and staleness bounds", "separation of well-formedness from soundness"],
+    "industry_terms": ["oracle staleness check", "price decimals mismatch", "oracle manipulation"],
+    "external_refs": {
+      "dasp": ["DASP-6 Bad Randomness (adjacent: external input trusted without validation)"],
+      "cwe": ["CWE-20 Improper Input Validation"],
+      "other": ["oracle-manipulation analyses in collateralized lending"]
+    }
+  },
+  "classification": {
+    "modal_class": ["safety"],
+    "deontic_role": ["assumption", "constraint", "environmental-assumption", "trust-assumption"],
+    "domains": ["defi-lending", "defi", "contract", "economic"],
+    "abstraction_levels": ["contract", "protocol", "economic"],
+    "verification_modalities": ["smt", "symbolic-execution", "runtime-verification", "model-checking"],
+    "decidability": "decidable-bounded"
+  },
+  "descriptions": {
+    "semantic": "A call to a valuation provider returns a well-formed value in a declared unit and scale, obtained under declared sampling, freshness, and stability policies, without modifying the caller's protected state. The record covers well-formedness and the interface contract only. It makes no claim that the returned value is economically correct, that it resists manipulation, or that it reflects realizable value; that is a separate and much harder question which this record deliberately does not pretend to answer.",
+    "system_theoretic": "The provider is an external module returning a value into a consuming computation. The profile declares the value's unit and scale, its admissible range, the sampling method and window, a freshness bound relative to the consumer's time measure, a stability policy governing how much the value may move between observations before the consumer treats it as suspect, a frame condition naming caller state the provider may not touch, and an error policy specifying what the consumer does when any of these fails. The property is that each is declared and checked, not that any particular choice is made.",
+    "security": "Valuation is the input through which an attacker converts capital into a false belief about collateral. This record addresses only the half that is mechanically checkable, and the separation matters because conflating the two produces false assurance. Well-formedness failures: a value returned in a different scale than the consumer assumes, silently changing every capacity computation by orders of magnitude; a stale value accepted because no freshness bound is enforced; a zero or negative value accepted where the domain requires positivity, making capacity trivially zero or the comparison meaningless; a provider that reverts, blocking every operation that consults it including exits that did not need it. Economic failures, explicitly out of scope here: a well-formed, fresh, in-range value that is nonetheless manipulated. No amount of interface checking excludes that, and a record claiming otherwise would be the more dangerous artifact.",
+    "execution_semantics": "Concretely the call to a price or valuation source, its return-value handling, and the scaling applied before comparison. Violations live in: an assumed scale that differs from the provider's; a missing or ineffective freshness check; acceptance of boundary values the domain excludes; a provider call on a path that does not consume its result, so a provider failure blocks an unrelated operation; and a provider whose call reenters the consumer.",
+    "formal_verification": "The well-formedness clauses are ordinary input-validation obligations, provable by SMT or symbolic execution over the consumer: for every path consuming a valuation, prove the range, scale, and freshness checks dominate the use. The stability and error-policy clauses are best checked as runtime obligations. The economic clause is not verifiable by any of these means and should be recorded as an undischarged assumption with an explicit note, rather than omitted — omitting it is how a verified system acquires an unverified dependency nobody tracks."
+  },
+  "formalization": {
+    "signature": "Providers V; valuation call read : V x State -> Val x Outcome; declared unit u; scale sigma; admissible range Rng; sampling policy samp; freshness bound phi relative to time measure T; stability policy stab; caller frame CallerFrame; error policy err.",
+    "symbols": ["V", "read", "Val", "u", "sigma", "Rng", "samp", "phi", "T", "stab", "CallerFrame", "err", "State", "Outcome"],
+    "first_order_logic": "Well-formedness:  forall v, s . read(v, s) = (x, ok)  ->  x in Rng and unit(x) = u and scale(x) = sigma.\nFreshness:  forall v, s . read(v, s) = (x, ok)  ->  T(s) - observedAt(x) <= phi.\nStability:  consecutive observations differing by more than stab are handled by err rather than consumed silently.\nFrame:  read does not modify any component of CallerFrame.\nError policy totality:  err is defined for every failure mode — out of range, stale, unstable, provider failure — and no failure mode falls through to a default consumption of the value.\nDependency minimality:  a path that does not consume the returned value does not call read, so a provider failure cannot block it.\nSeparation clause (normative and load-bearing):  nothing in this record asserts that x approximates any economically realizable value. Manipulation resistance, sampling soundness, and market-depth adequacy are NOT established here and must be discharged separately or accepted as undischarged.",
+    "temporal_logic": {
+      "ltl": "G( valuationConsumed -> (inRange and correctScale and fresh and frameUnchanged) )",
+      "fairness": "n/a — safety property"
+    },
+    "hoare": [
+      { "pre": "true", "command": "read(v) then consume the value", "post": "the consumed value is in range, in the declared unit and scale, and within the freshness bound, or err was applied" },
+      { "pre": "provider v fails", "command": "any operation not consuming v's result", "post": "the operation is unaffected" },
+      { "pre": "consecutive observations differ by more than stab", "command": "consume", "post": "err applied; the value is not consumed silently" }
+    ],
+    "state_machine": "The provider is an environment module. Its return is constrained only by the declared profile; the consumer's obligation is that every path consuming a valuation is dominated by the checks the profile requires, and that paths not consuming one do not depend on the provider at all.",
+    "type_theoretic": "The valuation as a refinement type carrying its unit, scale, and observation time; consumption requires the refinement witness, so an unchecked value is not consumable. The economic quality of the value is outside the type and deliberately so.",
+    "algebraic": "Scale is a graded module structure on values; unit mismatch is a category error rather than a numeric one, which is why the record separates unit and scale from range rather than folding all three into a bound check."
+  },
+  "relationships": [
+    { "type": "composesWith", "target": "BPO:0113", "note": "Health preservation constrains how a returned valuation is used; this record constrains the shape of what is returned. Neither establishes that the valuation is economically correct, and the distinction is stated in both records precisely so the pair is not read as covering it." },
+    { "type": "composesWith", "target": "BPO:0114", "note": "Liquidation eligibility and the incentive are computed under a valuation; the same separation applies." },
+    { "type": "dependsOn", "target": "BPO:0118", "note": "Where the provider is restricted to a vetted registry, the restriction is an admission obligation on instance configuration." },
+    { "type": "conflictsWith", "target": "BPO:0117", "note": "Genuine tension: a strict freshness or stability policy that fails closed will block operations, narrowing the exit guard region. The dependency-minimality clause limits the damage but does not remove the tension." },
+    { "type": "mitigates", "target": "ATK:scale-mismatch" },
+    { "type": "mitigates", "target": "ATK:stale-valuation" },
+    { "type": "mitigates", "target": "ATK:provider-failure-block" }
+  ],
+  "attack_surface": [
+    { "class": "scale-mismatch", "pattern": "the value is returned in a different scale than the consumer assumes", "incident_refs": [], "notes": "Changes every capacity computation by orders of magnitude with no other symptom." },
+    { "class": "stale-valuation", "pattern": "an old observation is accepted because no freshness bound is enforced", "incident_refs": [], "notes": "The freshness clause. Particularly damaging across a market gap." },
+    { "class": "boundary-value-acceptance", "pattern": "a zero or out-of-domain value is accepted, making capacity trivially zero or the comparison meaningless", "incident_refs": [], "notes": "Range clause. The zero case often reads as a safe default and is not." },
+    { "class": "provider-failure-block", "pattern": "a failing provider call blocks an operation that does not consume its result", "incident_refs": [], "notes": "Dependency-minimality clause. Interacts directly with BPO:0117." },
+    { "class": "reentrant-provider", "pattern": "the provider call reenters the consumer", "incident_refs": [], "notes": "Frame clause. Turns a read into a control-transfer edge." },
+    { "class": "economically-manipulated-valuation", "pattern": "a well-formed, fresh, in-range value that has been moved by an attacker", "incident_refs": ["UNVERIFIED: oracle-manipulation incident class"], "notes": "Listed to be explicit that this record does NOT mitigate it. No interface check excludes it." }
+  ],
+  "observability": {
+    "events": ["valuation read events carrying value, unit, scale, and observation time", "error-policy activation events with the failure mode"],
+    "metrics": ["age of consumed observations against the freshness bound", "observation-to-observation movement against the stability policy", "count of consumed values outside the declared range (must be zero)"],
+    "invariant_checkpoints": ["pre-consumption: range, unit, scale, and freshness checks have all been applied", "post-read: caller frame unchanged"],
+    "runtime_assertions": ["assert the returned value lies in the declared range before any use", "assert the observation age is within the freshness bound", "assert the error policy is applied rather than defaulted on every failure mode"]
+  },
+  "verification": {
+    "strategies": [
+      { "approach": "Check-dominance proof over consuming paths", "tools": ["SMT-backed verifiers", "symbolic execution"], "strength": "proof", "notes": "For every path consuming a valuation, prove the range, unit, scale, and freshness checks dominate the use. This is the well-formedness half in full." },
+      { "approach": "Unconstrained-valuation model checking", "tools": ["explicit-state model checkers", "ProB"], "strength": "bounded-proof", "notes": "Model the returned value as unconstrained within the declared range rather than as a fixed number, so consumer guarantees are established across the range rather than at one point." },
+      { "approach": "Runtime enforcement of stability and error policy", "tools": ["runtime verification", "circuit-breaker patterns"], "strength": "high-coverage-evidence", "notes": "The stability clause is naturally a runtime obligation; a static proof of it would require modelling the environment's dynamics." },
+      { "approach": "Economic soundness assessment", "tools": [], "strength": "heuristic-evidence", "notes": "Deliberately empty tool list. Market-depth, sampling-soundness and manipulation-cost analyses are out of scope for this record and are not discharged by any check above. Record the residual as an undischarged assumption rather than omitting it." }
+    ],
+    "testability": ["a value outside the declared range is never consumed", "a stale observation is never consumed", "a scale mismatch is detected rather than silently scaling the capacity computation", "a provider failure does not block an operation that does not consume its result"]
+  },
+  "enforcement": {
+    "runtime": ["validate range, unit, scale, and freshness before any use", "apply an explicit error policy per failure mode rather than a default", "avoid calling the provider on paths that do not consume its result"],
+    "static": ["prove the checks dominate every consuming use", "prove no consumer state component in the frame is written by the provider call", "prove the error policy is total over the declared failure modes"],
+    "design_patterns": ["carry unit and scale with the value rather than assuming them at the call site", "declare freshness and stability policies as named parameters", "record the economic assumption explicitly as undischarged rather than leaving it unstated"]
+  },
+  "assumptions": [
+    { "kind": "environmental", "statement": "The valuation provider returns a value in the declared unit, scale, and range when it succeeds.", "discharged_by": null },
+    { "kind": "environmental", "statement": "The provider does not modify the caller's protected state during a read.", "discharged_by": null },
+    { "kind": "economic", "statement": "The returned value approximates realizable value under the deployment's market conditions and is not economically manipulable at a cost below the value at risk. This record does not establish it, no interface check can, and it must be discharged by separate analysis or accepted as an open hypothesis.", "discharged_by": null },
+    { "kind": "trust", "statement": "Where discharge is by admission restriction, the vetting establishes the profile for each admitted provider.", "discharged_by": "BPO:0118" }
+  ],
+  "provenance": {
+    "authors": ["BPO seed"],
+    "created": "2026-08-08",
+    "confidence": "draft",
+    "sources": ["oracle-manipulation analyses in collateralized lending", "input-validation and interface-contract practice", "a collateralized-lending B-method verification study"],
+    "notes": "The separation between interface well-formedness and economic correctness is the whole point of the record, which is why it appears as a normative clause in the formalization, as an explicitly non-mitigated attack class, as a verification strategy with an empty tool list, and as an undischarged economic assumption. Four redundant statements of the same boundary, because collapsing it is the single most common way a verified lending system acquires an unverified dependency."
+  }
+}
